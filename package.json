@@ -1,4 +1,11 @@
 {
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev"
+  },
   "dependencies": {
     "turbo": "^2.11.10"
   }

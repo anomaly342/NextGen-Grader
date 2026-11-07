@@ -1,7 +1,6 @@
 ---
-description: Conventions for the Next.js web app (routes, data fetching, UI style)
-globs: apps/web/**/*.{ts,tsx,css}
-alwaysApply: false
+paths:
+  - "apps/web/**/*.{ts,tsx,css}"
 ---
 
 # Frontend (apps/web)

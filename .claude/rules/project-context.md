@@ -1,8 +1,3 @@
----
-description: NextGen Grader project context, architecture and domain vocabulary
-alwaysApply: true
----
-
 # NextGen Grader: project context
 
 NextGen Grader is a university programming judge. Students upload `.cpp` files, a sandboxed worker

@@ -1,7 +1,6 @@
 ---
-description: Rules for changing the shared Prisma schema and migrations
-globs: packages/db/**
-alwaysApply: false
+paths:
+  - "packages/db/**"
 ---
 
 # Database (packages/db)
