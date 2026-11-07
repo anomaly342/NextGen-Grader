@@ -1,0 +1,23 @@
+---
+description: Rules for changing the shared Prisma schema and migrations
+globs: packages/db/**
+alwaysApply: false
+---
+
+# Database (packages/db)
+
+- There is one `schema.prisma`, shared by web and api. Change it only here, then run
+  `pnpm --filter db prisma migrate dev --name <short_change_name>` and commit the migration.
+- Every model has `updatedAt DateTime @updatedAt` and `createdAt DateTime @default(now())`.
+- Do not add fields that can be derived from other fields on the same row (e.g. a stored skill level that
+  follows from `rating` and `ratedCount`). Compute them in code instead. Ask before adding denormalized data.
+- Add a short `//` comment on any field whose meaning is not obvious from its name, including units
+  (`timeLimit // seconds`, `memoryLimitMb`).
+- Pick `onDelete` on purpose: `Cascade` for owned children (sections, testcases, results), `SetNull` for
+  "who did it" links (`assignedById`, `createdById`). Never cascade-delete submissions from a user deletion
+  without asking.
+- Index foreign keys that are filtered on (`@@index([classroomId])`, `@@index([examId, problemId])`).
+- Keep enum values UPPER_SNAKE. Existing enums: Role, GradingMode, ProblemKind, Difficulty, Language,
+  RecommendationReason, ChatRole, Verdict, CheckStatus, SubmissionStatus.
+- `fsobjects` is the CMS-compatible file table (`digest` = SHA-1 hex, `loid` = Postgres large object). Do not rename it.
+- Do not use `prisma db push` against shared environments.
