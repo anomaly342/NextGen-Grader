@@ -1,12 +1,17 @@
 {
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
-    "dev": "turbo dev"
+    "dev": "turbo dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
-  "dependencies": {
+  "devDependencies": {
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "turbo": "^2.11.10"
   }
 }

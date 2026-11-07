@@ -6,7 +6,7 @@ paths:
 # Database (packages/db)
 
 - There is one `schema.prisma`, shared by web and api. Change it only here, then run
-  `pnpm --filter db prisma migrate dev --name <short_change_name>` and commit the migration.
+  `cd packages/db && bunx prisma migrate dev --name <short_change_name>` and commit the migration.
 - Every model has `updatedAt DateTime @updatedAt` and `createdAt DateTime @default(now())`.
 - Do not add fields that can be derived from other fields on the same row (e.g. a stored skill level that
   follows from `rating` and `ratedCount`). Compute them in code instead. Ask before adding denormalized data.

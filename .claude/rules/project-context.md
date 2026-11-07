@@ -6,7 +6,7 @@ classrooms with sections, three grading modes, Elo-based practice recommendation
 chatbot, an exam mode with separate exam accounts, Dolos plagiarism checks (exams only), and LLM
 problem drafting.
 
-## Repo layout (Turborepo, pnpm)
+## Repo layout (Turborepo, Bun)
 
 - `apps/web`: Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Socket.IO client
 - `apps/api`: NestJS, TypeScript, BullMQ, Socket.IO, Prisma client
