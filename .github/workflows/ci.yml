@@ -30,7 +30,7 @@ jobs:
       - run: bun install --frozen-lockfile
       # contract.json / contract.d.ts are gitignored, so generate them first.
       - name: Generate Prisma contract
-        run: bun run --cwd packages/prisma contract:emit
+        run: bun run --cwd packages/prisma emit
       - name: Type-check
         run: bun run check-types
 
@@ -49,6 +49,6 @@ jobs:
       - run: bun install --frozen-lockfile
       # Tests import @repo/prisma, which needs the generated contract too.
       - name: Generate Prisma contract
-        run: bun run --cwd packages/prisma contract:emit
+        run: bun run --cwd packages/prisma emit
       - name: Test
         run: bun run test
