@@ -25,9 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.13
+      # From the npm registry, not GitHub Releases (whose downloads 504).
+      - run: npm install -g bun@1.3.13
       - run: bun install --frozen-lockfile
       # contract.json / contract.d.ts are gitignored, so generate them first.
       - name: Generate Prisma contract
@@ -45,9 +44,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.13
+      # From the npm registry, not GitHub Releases (whose downloads 504).
+      - run: npm install -g bun@1.3.13
       - run: bun install --frozen-lockfile
       # Tests import @repo/prisma, which needs the generated contract too.
       - name: Generate Prisma contract
