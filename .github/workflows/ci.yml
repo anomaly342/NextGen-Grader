@@ -2,8 +2,6 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 # Cancel an older run when new commits are pushed to the same PR/branch.
 concurrency:
