@@ -24,6 +24,14 @@ Generate code, corrections, and refactorings that comply with the basic principl
 - Use PascalCase for classes.
 - Use camelCase for variables, functions, and methods.
 - Use kebab-case for file and directory names.
+- End every file name with a suffix for its kind: `<name>.<kind>.ts`.
+  - `.module.ts`, `.controller.ts`, `.service.ts`, `.guard.ts`, `.interceptor.ts`,
+    `.decorator.ts`, `.filter.ts`, `.pipe.ts`, `.middleware.ts`
+  - `.dto.ts` for inputs in `dto/` (e.g. `create-user.dto.ts`)
+  - `.interface.ts` for every other data type in `interfaces/`, including `type`
+    aliases (e.g. `sessions/interfaces/session-user.interface.ts`)
+  - `.constants.ts` for shared constants, `.util.ts` for helpers
+  - `.spec.ts` for tests, next to the file they test
 - Use UPPERCASE for environment variables.
   - Avoid magic numbers and define constants.
 - Start each function with a verb.
@@ -109,7 +117,7 @@ Generate code, corrections, and refactorings that comply with the basic principl
       - And other controllers for secondary routes.
     - A `dto` folder for inputs only: DTOs validated with class-validator.
     - An `interfaces` folder for every other data type: outputs, internal shapes,
-      payloads (e.g. `session/interfaces/session-user.ts`). Don't use a `models` folder.
+      payloads (e.g. `sessions/interfaces/session-user.interface.ts`). Don't use a `models` folder.
     - A services module with business logic and persistence.
       - Persist through `PrismaService` (models come from the `@repo/prisma` contract);
         don't write entity classes.
