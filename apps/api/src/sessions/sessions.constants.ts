@@ -1,5 +1,5 @@
 /** Name of the cookie that holds the session's cookie id. */
-export const SESSION_COOKIE_NAME = 'sid';
+export const SESSION_COOKIE_NAME = 'ngg.sid';
 
 /** How long a session lives, in seconds (7 days): Redis key, JWT and cookie. */
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;

@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
@@ -6,12 +7,16 @@ import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  // Only the web app may call the API, with cookies (the `sid` session cookie).
+  // Only the web app may call the API, with cookies (the `ngg.sid` session cookie).
   app.enableCors({
     origin: process.env['WEB_URL'],
     credentials: true,
   });
   app.use(cookieParser());
+  // Validates every @Body() DTO; unknown fields are rejected.
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
+  );
   // Runs onModuleDestroy hooks (e.g. closing the DB pool) on SIGTERM/SIGINT.
   app.enableShutdownHooks();
 
