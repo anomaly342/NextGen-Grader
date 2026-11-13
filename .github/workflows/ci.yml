@@ -37,6 +37,18 @@ jobs:
   tests:
     name: Tests
     runs-on: ubuntu-latest
+    # Redis for the RedisModule integration tests. Service containers cannot set
+    # --requirepass, so CI Redis has no password (unlike docker-compose.yml).
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       # Node 24: the API loads packages/prisma's .ts files via type stripping,

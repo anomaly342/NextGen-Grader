@@ -101,14 +101,19 @@ Generate code, corrections, and refactorings that comply with the basic principl
   - Use modular architecture.
   - Encapsulate the API in modules.
     - One module per main domain/route.
+    - Name modules after the plural when the domain is countable: folder `sessions/`,
+      files `sessions.module.ts` / `sessions.service.ts`, classes `SessionsModule` /
+      `SessionsService`. Uncountable or infrastructure names stay singular (`auth`,
+      `redis`, `prisma`). Types for one item stay singular (`SessionUser`).
     - One controller for its route.
       - And other controllers for secondary routes.
-    - A models folder with data types.
-      - DTOs validated with class-validator for inputs.
-      - Declare simple types for outputs.
+    - A `dto` folder for inputs only: DTOs validated with class-validator.
+    - An `interfaces` folder for every other data type: outputs, internal shapes,
+      payloads (e.g. `session/interfaces/session-user.ts`). Don't use a `models` folder.
     - A services module with business logic and persistence.
-      - Entities with MikroORM for data persistence.
-      - One service per entity.
+      - Persist through `PrismaService` (models come from the `@repo/prisma` contract);
+        don't write entity classes.
+      - One service per model.
   
   - Common Module: Create a common module (e.g., @app/common) for shared, reusable code across the application.
     - This module should include:
