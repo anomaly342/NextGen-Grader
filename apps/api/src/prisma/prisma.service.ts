@@ -6,14 +6,14 @@ type Models = Db['orm']['public'];
 
 /**
  * Typed base so `PrismaService` exposes each model as a property
- * (`prisma.Post`, `prisma.User`). The real getters are added in the constructor.
+ * (`prismaService.User`, ...). The real getters are added in the constructor.
  */
 const ModelsBase = class {} as new () => Models;
 
 /**
  * Exposes the shared Prisma models from `@repo/prisma`, and nothing else.
  *
- * Query models directly: `this.prisma.Post.where({ authorId }).all()`.
+ * Query models directly: `this.prismaService.User.where({ id }).first()`.
  * The connection pool is closed by `PrismaModule` on shutdown.
  */
 @Injectable()

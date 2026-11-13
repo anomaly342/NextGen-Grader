@@ -24,6 +24,9 @@ Generate code, corrections, and refactorings that comply with the basic principl
 - Use PascalCase for classes.
 - Use camelCase for variables, functions, and methods.
 - Use kebab-case for file and directory names.
+- Import across modules with the `@/` alias (`@/*` → `src/*`), never `../`:
+  `import { SessionsService } from '@/sessions/sessions.service'`.
+  Use `./` only for files in the same module folder.
 - End every file name with a suffix for its kind: `<name>.<kind>.ts`.
   - `.module.ts`, `.controller.ts`, `.service.ts`, `.guard.ts`, `.interceptor.ts`,
     `.decorator.ts`, `.filter.ts`, `.pipe.ts`, `.middleware.ts`
@@ -34,6 +37,9 @@ Generate code, corrections, and refactorings that comply with the basic principl
   - `.spec.ts` for tests, next to the file they test
 - Use UPPERCASE for environment variables.
   - Avoid magic numbers and define constants.
+- Name injected dependencies after their type in camelCase:
+  `prismaService: PrismaService`, `sessionsService: SessionsService`,
+  `jwtService: JwtService`, `redis: Redis`. Never shorten (`prisma`, `jwt`, `auth`).
 - Start each function with a verb.
 - Use verbs for boolean variables. Example: isLoading, hasError, canDelete, etc.
 - Use complete words instead of abbreviations and correct spelling.

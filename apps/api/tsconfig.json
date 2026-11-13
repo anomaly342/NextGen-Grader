@@ -24,5 +24,6 @@
     "types": ["node", "jest"],
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
+    "paths": { "@/*": ["./src/*"] },
   },
 }

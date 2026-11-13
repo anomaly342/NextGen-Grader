@@ -1,11 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  app.enableCors();
+  // Only the web app may call the API, with cookies (the `sid` session cookie).
+  app.enableCors({
+    origin: process.env['WEB_URL'],
+    credentials: true,
+  });
+  app.use(cookieParser());
   // Runs onModuleDestroy hooks (e.g. closing the DB pool) on SIGTERM/SIGINT.
   app.enableShutdownHooks();
 
@@ -14,20 +20,21 @@ async function bootstrap(): Promise<void> {
     .setVersion('1.0')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  // Routes only: no models, API client, downloads, dev tools, MCP or telemetry.
+  // Routes + "Test Request"; no models, downloads, dev tools, MCP or telemetry.
   app.use(
     '/reference',
     apiReference({
       content: document,
       hideModels: true,
       hideClientButton: true,
-      hideTestRequestButton: true,
       hideDownloadButton: true,
       hideDarkModeToggle: true,
       showDeveloperTools: 'never',
       mcp: { disabled: true },
       telemetry: false,
       withDefaultFonts: false,
+      // Sidebar shows the route path (GET /auth/google); the summary/description go below it.
+      operationTitleSource: 'path',
     }),
   );
 

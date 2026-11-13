@@ -6,6 +6,6 @@ import { PrismaService } from './prisma/prisma.service';
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly prisma: PrismaService,
+    private readonly prismaService: PrismaService,
   ) {}
 }

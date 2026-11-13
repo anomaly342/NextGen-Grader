@@ -3,9 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
 import { SessionUser } from './interfaces/session-user.interface';
-
-/** How long a session lives, in seconds (7 days). Used for both Redis and the JWT. */
-const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+import { SESSION_TTL_SECONDS } from './sessions.constants';
 
 /**
  * Stores sessions in Redis as `{cookieId} -> {jwt}`, where the JWT decodes
@@ -15,13 +13,13 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 export class SessionsService {
   constructor(
     private readonly redis: Redis,
-    private readonly jwt: JwtService,
+    private readonly jwtService: JwtService,
   ) {}
 
   /** Creates a session for `user` and returns the new cookie id. */
   async createSession(user: SessionUser): Promise<string> {
     const cookieId = randomUUID();
-    const token = await this.jwt.signAsync(
+    const token = await this.jwtService.signAsync(
       { ...user },
       { expiresIn: SESSION_TTL_SECONDS },
     );
@@ -34,7 +32,7 @@ export class SessionsService {
     const token = await this.redis.get(cookieId);
     if (!token) return null;
     try {
-      const payload = await this.jwt.verifyAsync<SessionUser>(token);
+      const payload = await this.jwtService.verifyAsync<SessionUser>(token);
       // Pick the user fields only, dropping JWT claims like `iat` / `exp`.
       return {
         id: payload.id,
