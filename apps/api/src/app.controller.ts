@@ -8,9 +8,4 @@ export class AppController {
     private readonly appService: AppService,
     private readonly prisma: PrismaService,
   ) {}
-
-  @Get()
-  async getHello(): Promise<string> {
-    return this.appService.getHello();
-  }
 }
