@@ -1,6 +1,6 @@
 ---
 paths:
-  - "apps/api/**/*.ts"
+  - 'apps/api/**/*.ts'
 ---
 
 You are a senior TypeScript programmer with experience in the NestJS framework and a preference for clean programming and design patterns.
@@ -24,8 +24,24 @@ Generate code, corrections, and refactorings that comply with the basic principl
 - Use PascalCase for classes.
 - Use camelCase for variables, functions, and methods.
 - Use kebab-case for file and directory names.
+- Import across modules with the `@/` alias (`@/*` → `src/*`), never `../`:
+  `import { SessionsService } from '@/sessions/sessions.service'`.
+  Use `./` only for files in the same module folder.
+- End every file name with a suffix for its kind: `<name>.<kind>.ts`.
+  - `.module.ts`, `.controller.ts`, `.service.ts`, `.guard.ts`, `.interceptor.ts`,
+    `.decorator.ts`, `.filter.ts`, `.pipe.ts`, `.middleware.ts`
+  - `.dto.ts` in `dto/` for every DTO: request bodies (`login.dto.ts`) and any type
+    named `…Dto`, including responses and their row shapes (`user.dto.ts`,
+    `user-dto-row.dto.ts`)
+  - `.interface.ts` in `interfaces/` for every other data type, including `type`
+    aliases (e.g. `sessions/interfaces/session-user.interface.ts`)
+  - `.constants.ts` for shared constants, `.util.ts` for helpers
+  - `.spec.ts` for tests, next to the file they test
 - Use UPPERCASE for environment variables.
   - Avoid magic numbers and define constants.
+- Name injected dependencies after their type in camelCase:
+  `prismaService: PrismaService`, `sessionsService: SessionsService`,
+  `jwtService: JwtService`, `redis: Redis`. Never shorten (`prisma`, `jwt`, `auth`).
 - Start each function with a verb.
 - Use verbs for boolean variables. Example: isLoading, hasError, canDelete, etc.
 - Use complete words instead of abbreviations and correct spelling.
@@ -66,6 +82,9 @@ Generate code, corrections, and refactorings that comply with the basic principl
 
 ### Classes
 
+- Helpers used by one class are `private` methods of that class, not module-level
+  functions/arrow consts in the same file (e.g. `private toUserDto(row)`).
+  Helpers shared across modules go in `src/common/utils/`.
 - Follow SOLID principles.
 - Prefer composition over inheritance.
 - Declare interfaces to define contracts.
@@ -93,24 +112,34 @@ Generate code, corrections, and refactorings that comply with the basic principl
 - Write acceptance tests for each module.
   - Follow the Given-When-Then convention.
 
-
   ## Specific to NestJS
 
   ### Basic Principles
-  
   - Use modular architecture.
   - Encapsulate the API in modules.
     - One module per main domain/route.
+    - Name modules after the plural when the domain is countable: folder `sessions/`,
+      files `sessions.module.ts` / `sessions.service.ts`, classes `SessionsModule` /
+      `SessionsService`. Uncountable or infrastructure names stay singular (`auth`,
+      `redis`, `prisma`). Types for one item stay singular (`SessionUser`).
     - One controller for its route.
       - And other controllers for secondary routes.
-    - A models folder with data types.
-      - DTOs validated with class-validator for inputs.
-      - Declare simple types for outputs.
+    - A `dto` folder for every DTO: if it's named `…Dto`, it goes here.
+      - Request bodies are classes validated with class-validator (`LoginDto`).
+      - Response DTOs and their row shapes too (`UserDto`, `UserDtoRow`).
+    - An `interfaces` folder for every other data type: internal shapes, payloads,
+      response wrappers (e.g. `sessions/interfaces/session-user.interface.ts`).
+      Don't use a `models` folder.
     - A services module with business logic and persistence.
-      - Entities with MikroORM for data persistence.
-      - One service per entity.
-  
+      - Persist through `PrismaService` (models come from the `@repo/prisma` contract);
+        don't write entity classes.
+      - One service per model.
+
   - Common Module: Create a common module (e.g., @app/common) for shared, reusable code across the application.
+    - Lives in `src/common/`, one folder per kind. All guards go in `src/common/guards/`
+      (e.g. `session.guard.ts`) and all decorators in `src/common/decorators/`
+      (e.g. `current-user.decorator.ts`), even if only one module uses them today.
+      Shared Swagger/OpenAPI schemas and helpers go in `src/common/swagger/`.
     - This module should include:
       - Configs: Global configuration settings.
       - Decorators: Custom decorators for reusability.
@@ -122,7 +151,7 @@ Generate code, corrections, and refactorings that comply with the basic principl
       - Types: Common TypeScript types or interfaces.
       - Utils: Helper functions and utilities.
       - Validators: Custom validators for consistent input validation.
-  
+
   - Core module functionalities:
     - Global filters for exception handling.
     - Global middlewares for request management.

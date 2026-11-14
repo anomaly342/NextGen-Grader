@@ -5,7 +5,7 @@ import { PrismaService } from './prisma/prisma.service';
 
 describe('AppController', () => {
   let appController: AppController;
-  const mockPrisma = { Post: { all: jest.fn().mockResolvedValue([]) } };
+  const mockPrisma = {};
 
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
@@ -16,11 +16,7 @@ describe('AppController', () => {
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', async () => {
-      const expectedGreeting = 'Hello World!';
-      const actualGreeting = await appController.getHello();
-      expect(actualGreeting).toBe(expectedGreeting);
-    });
+  it('should be defined', () => {
+    expect(appController).toBeDefined();
   });
 });

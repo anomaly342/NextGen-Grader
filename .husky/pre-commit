@@ -1,2 +1,2 @@
-bun run check-types
-bun run test
+bun run check-types --ui=stream
+bun run test --ui=stream

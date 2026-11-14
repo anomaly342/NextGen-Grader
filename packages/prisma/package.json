@@ -8,7 +8,10 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "contract:emit": "prisma contract emit",
+    "emit": "prisma contract emit",
+    "plan": "prisma migration plan",
+    "show": "prisma migration show",
+    "migrate": "prisma db migrate --advance-ref db",
     "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
