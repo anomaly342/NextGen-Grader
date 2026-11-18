@@ -1,2 +1,3 @@
 bun run check-types --ui=stream
+bun run lint --ui=stream
 bun run test --ui=stream

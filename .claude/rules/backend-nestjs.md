@@ -37,6 +37,10 @@ Generate code, corrections, and refactorings that comply with the basic principl
     aliases (e.g. `sessions/interfaces/session-user.interface.ts`)
   - `.constants.ts` for shared constants, `.util.ts` for helpers
   - `.spec.ts` for tests, next to the file they test
+  - `.e2e-spec.ts` for e2e tests in `test/`; `.setup.ts` for Jest setup files
+- `test/support/` (e2e doubles and helpers) follows the same layout as `src/`: one export
+  per file, suffixes as above, shared types in `test/support/interfaces/`. Inside `test/`,
+  `../` imports between `test/` files are fine; reach `src/` through `@/`.
 - Use UPPERCASE for environment variables.
   - Avoid magic numbers and define constants.
 - Name injected dependencies after their type in camelCase:
