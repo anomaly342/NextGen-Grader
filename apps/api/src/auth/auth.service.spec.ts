@@ -6,6 +6,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
 import { BcryptService } from '@/bcrypt/bcrypt.service';
+import { ClockService } from '@/clock/clock.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { SessionsService } from '@/sessions/sessions.service';
 import { DUMMY_PASSWORD_HASH } from './auth.constants';
@@ -85,6 +86,7 @@ describe('AuthService', () => {
           useValue: { createSession: mockCreateSession },
         },
         { provide: BcryptService, useValue: mockBcrypt },
+        ClockService,
       ],
     }).compile();
     service = module.get(AuthService);

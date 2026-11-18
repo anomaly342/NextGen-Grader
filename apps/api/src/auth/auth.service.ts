@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
 import { BcryptService } from '@/bcrypt/bcrypt.service';
+import { ClockService } from '@/clock/clock.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { SessionUser } from '@/sessions/interfaces/session-user.interface';
 import { SessionsService } from '@/sessions/sessions.service';
@@ -31,6 +32,7 @@ export class AuthService {
     private readonly prismaService: PrismaService,
     private readonly sessionsService: SessionsService,
     private readonly bcryptService: BcryptService,
+    private readonly clockService: ClockService,
   ) {}
 
   /** Returns the Google consent-screen URL carrying `state`. */
@@ -106,7 +108,7 @@ export class AuthService {
       });
     }
     await this.prismaService.User.where({ id: user.id }).update({
-      lastLoginAt: new Date(),
+      lastLoginAt: this.clockService.now(),
     });
     const cookieId = await this.sessionsService.createSession(
       this.toSessionUser(user),
@@ -133,7 +135,11 @@ export class AuthService {
           'role',
           'credentialsSetAt',
         )
-        .update({ username, passwordHash, credentialsSetAt: new Date() });
+        .update({
+          username,
+          passwordHash,
+          credentialsSetAt: this.clockService.now(),
+        });
     } catch (error) {
       if (this.isUsernameTaken(error)) {
         throw new ConflictException({
@@ -182,7 +188,7 @@ export class AuthService {
 
   /** Creates the user on first login, otherwise refreshes their profile and last login. */
   private async upsertUser(profile: GoogleProfile): Promise<SessionUser> {
-    const lastLoginAt = new Date();
+    const lastLoginAt = this.clockService.now();
     return this.prismaService.User.select(
       'id',
       'email',
