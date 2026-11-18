@@ -245,6 +245,77 @@ describe('Auth (e2e)', () => {
     });
   });
 
+  describe('Credential setup gate', () => {
+    it('a new User signed in with Google gets 403 CREDENTIAL_SETUP_REQUIRED on a gated route', async () => {
+      // Given a new User who signed in with Google and has not finished Credential setup
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      // When they call a route other than who am I, Credential setup, or logout
+      // Then the server refuses until Credential setup is done
+      await expectErrorCode(
+        device.get('/auth/google'),
+        403,
+        'CREDENTIAL_SETUP_REQUIRED',
+      );
+    });
+
+    it('GET /auth/me, POST /auth/setup and POST /auth/logout work before setup', async () => {
+      // Given a new User who has not finished Credential setup
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      // Then who am I and logout still work
+      const me = await device.get('/auth/me').expect(200);
+      expect(me.body).toMatchObject({
+        email: STUDENT_EMAIL,
+        credentialsSetAt: null,
+      });
+      await device.post('/auth/logout').expect(204);
+      // And Credential setup still works on the next sign-in
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      await setupCredentials(device, 'somchai_k').expect(200);
+    });
+
+    it('after setup the response sets a new ngg.sid, the old cookie gets 401, and gated routes work with the new one', async () => {
+      // Given a new User signed in with Google
+      const device = createDevice();
+      const signIn = await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      const oldCookie = findSessionCookie(signIn)!.split(';')[0];
+      // When they finish Credential setup
+      const setupResponse = await setupCredentials(device, 'somchai_k').expect(
+        200,
+      );
+      const newCookie = findSessionCookie(setupResponse)!.split(';')[0];
+      // Then the response sets a different session cookie
+      expect(findSessionCookie(setupResponse)).toMatch(/HttpOnly/);
+      expect(newCookie).not.toBe(oldCookie);
+      // And the old cookie is no longer a session
+      const replay = await request(e2e.app.getHttpServer())
+        .get('/auth/me')
+        .set('Cookie', oldCookie);
+      expect(replay.status).toBe(401);
+      expect(replay.body).toMatchObject({ code: 'NOT_SIGNED_IN' });
+      // And the new cookie is past the gate
+      await device.get('/auth/google').expect(200);
+    });
+
+    it('a User who finished setup earlier is not gated after signing in again', async () => {
+      // Given a User who finished Credential setup on an earlier visit
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      // When they sign in again with Google
+      const googleDevice = createDevice();
+      await signInWithGoogle(googleDevice, { email: STUDENT_EMAIL });
+      // Then a gated route works
+      await googleDevice.get('/auth/google').expect(200);
+      // And the same is true after a password sign-in
+      const passwordDevice = createDevice();
+      await passwordDevice
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+      await passwordDevice.get('/auth/google').expect(200);
+    });
+  });
+
   describe('Password login', () => {
     beforeEach(async () => {
       await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');

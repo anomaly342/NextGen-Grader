@@ -124,6 +124,18 @@ describe('SessionsService', () => {
     expect(actualUser).toEqual(inputUser);
   });
 
+  it('returns the current User session, including Credential setup', async () => {
+    const inputCookieId = await service.createSession(inputRecord);
+    const actualSession = await service.findCurrentUserSession(inputCookieId);
+    expect(actualSession).toMatchObject({
+      kind: 'USER',
+      id: 1,
+      credentialsSetAt: null,
+      startedBy: 'GOOGLE',
+      email: inputUser.email,
+    });
+  });
+
   it('returns null for an unknown cookie id', async () => {
     const actualUser = await service.getUserSession('missing');
     expect(actualUser).toBeNull();

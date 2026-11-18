@@ -1,7 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { SessionGuard } from '@/common/guards/session.guard';
 import { SESSION_COOKIE_NAME } from '@/sessions/sessions.constants';
 import { OAUTH_STATE_COOKIE_NAME } from './auth.constants';
@@ -30,9 +30,6 @@ describe('AuthController', () => {
     redirect: jest.Mock;
   };
 
-  const createRequest = (state?: string): Request =>
-    ({ cookies: { [OAUTH_STATE_COOKIE_NAME]: state } }) as unknown as Request;
-
   beforeEach(async () => {
     process.env['WEB_URL'] = 'http://localhost:3000';
     mockAuth = {
@@ -40,7 +37,10 @@ describe('AuthController', () => {
         (state: string) => `https://google/?state=${state}`,
       ),
       loginWithGoogle: jest.fn().mockResolvedValue('cookie-id'),
-      setupCredentials: jest.fn().mockResolvedValue(expectedUser),
+      setupCredentials: jest.fn().mockResolvedValue({
+        cookieId: 'cookie-id',
+        user: expectedUser,
+      }),
       loginWithPassword: jest
         .fn()
         .mockResolvedValue({ cookieId: 'cookie-id', user: expectedUser }),
@@ -81,7 +81,7 @@ describe('AuthController', () => {
     await controller.handleGoogleCallback(
       'code',
       'state-1',
-      createRequest('state-1'),
+      'state-1',
       mockRes as unknown as Response,
     );
     expect(mockAuth.loginWithGoogle).toHaveBeenCalledWith('code');
@@ -98,7 +98,7 @@ describe('AuthController', () => {
       controller.handleGoogleCallback(
         'code',
         'forged',
-        createRequest('state-1'),
+        'state-1',
         mockRes as unknown as Response,
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
@@ -110,19 +110,30 @@ describe('AuthController', () => {
       controller.handleGoogleCallback(
         'code',
         'state-1',
-        createRequest(undefined),
+        undefined,
         mockRes as unknown as Response,
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('POST /auth/setup sets credentials for the signed-in user', async () => {
+  it('POST /auth/setup sets credentials and replaces ngg.sid', async () => {
     const inputBody = { username: 'somchai_k', password: 'password123' };
     const actualBody = await controller.setupCredentials(
       { id: 1 } as never,
       inputBody,
+      'old-cookie',
+      mockRes as unknown as Response,
     );
-    expect(mockAuth.setupCredentials).toHaveBeenCalledWith(1, inputBody);
+    expect(mockAuth.setupCredentials).toHaveBeenCalledWith(
+      1,
+      inputBody,
+      'old-cookie',
+    );
+    expect(mockRes.cookie).toHaveBeenCalledWith(
+      'ngg.sid',
+      'cookie-id',
+      expect.objectContaining({ httpOnly: true, path: '/' }),
+    );
     expect(actualBody).toEqual(expectedUser);
   });
 
@@ -149,10 +160,7 @@ describe('AuthController', () => {
   });
 
   it('POST /auth/logout deletes the session and clears only ngg.sid', async () => {
-    await controller.logout(
-      { cookies: { [SESSION_COOKIE_NAME]: 'cookie-id' } } as unknown as Request,
-      mockRes as unknown as Response,
-    );
+    await controller.logout('cookie-id', mockRes as unknown as Response);
     expect(mockAuth.logout).toHaveBeenCalledWith('cookie-id');
     expect(mockRes.clearCookie).toHaveBeenCalledWith(
       'ngg.sid',

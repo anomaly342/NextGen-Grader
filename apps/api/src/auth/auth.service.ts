@@ -55,13 +55,23 @@ export class AuthService {
   }
 
   /**
-   * Sets the user's username and password once. The `credentialsSetAt IS NULL`
-   * check and the write are one SQL statement, so two requests can't both win.
+   * Sets the user's username and password once, then replaces the session
+   * so the new cookie carries Credential setup as done. The old cookie dies.
+   * The `credentialsSetAt IS NULL` check and the write are one SQL statement,
+   * so two requests can't both win. A failed setup leaves the session as it was.
    */
   async setupCredentials(
     userId: number,
     { username, password }: SetupCredentialsDto,
-  ): Promise<UserDto> {
+    cookieId: string,
+  ): Promise<LoginResult> {
+    const current = await this.sessionsService.findCurrentUserSession(cookieId);
+    if (!current || current.id !== userId) {
+      throw new UnauthorizedException({
+        code: 'NOT_SIGNED_IN',
+        message: 'Sign in first',
+      });
+    }
     const passwordHash = await this.bcryptService.hash(password);
     const user = await this.claimCredentials(userId, username, passwordHash);
     if (!user) {
@@ -70,7 +80,12 @@ export class AuthService {
         message: 'Username and password are already set',
       });
     }
-    return user;
+    const nextCookieId = await this.openUserSession(
+      user,
+      current.startedBy,
+      this.toDate(current.lastLoginAt),
+    );
+    return { cookieId: nextCookieId, user };
   }
 
   /**
@@ -277,5 +292,11 @@ export class AuthService {
       avatarUrl: row.avatarUrl,
       role: row.role,
     };
+  }
+
+  /** `lastLoginAt` from the session JWT, or null when this session has none. */
+  private toDate(value: string | null): Date | null {
+    if (!value) return null;
+    return new Date(value);
   }
 }

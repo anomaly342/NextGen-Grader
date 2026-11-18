@@ -6,7 +6,6 @@ import {
   HttpStatus,
   Post,
   Query,
-  Req,
   Res,
   UnauthorizedException,
   UseGuards,
@@ -19,9 +18,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { Cookies } from '@/common/decorators/cookies.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { SkipCredentialSetup } from '@/common/decorators/skip-credential-setup.decorator';
 import type { SessionUser } from '@/sessions/interfaces/session-user.interface';
 import { SessionGuard } from '@/common/guards/session.guard';
 import {
@@ -58,6 +59,12 @@ export class AuthController {
       'Call with `credentials: "include"`, then send the browser to `url` ' +
       '(`window.location.href = url`). Sets a short-lived `oauth_state` cookie (CSRF protection) ' +
       'that `GET /auth/google/callback` checks after the user signs in with Google.',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'This browser already has a User session whose Credential setup is not done.',
+    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
   })
   @ApiOkResponse({
     description: 'The Google sign-in URL.',
@@ -117,12 +124,9 @@ export class AuthController {
   async handleGoogleCallback(
     @Query('code') code: string | undefined,
     @Query('state') state: string | undefined,
-    @Req() req: Request,
+    @Cookies(OAUTH_STATE_COOKIE_NAME) expectedState: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
-    const expectedState = (req.cookies as Record<string, string | undefined>)[
-      OAUTH_STATE_COOKIE_NAME
-    ];
     res.clearCookie(OAUTH_STATE_COOKIE_NAME, { path: GOOGLE_AUTH_PATH });
     if (!code || !state || state !== expectedState) {
       throw new UnauthorizedException('Invalid or expired login attempt');
@@ -135,12 +139,14 @@ export class AuthController {
   /** First login only: sets the username and password used by POST /auth/login. */
   @Post('setup')
   @HttpCode(HttpStatus.OK)
+  @SkipCredentialSetup()
   @UseGuards(SessionGuard)
   @ApiOperation({
     summary: 'Set username and password (first login)',
     description:
       'Signed in, setup not done. Sets the username and password used by `POST /auth/login`. ' +
-      'Stores only the bcrypt hash and sets `credentialsSetAt`.',
+      'Stores only the bcrypt hash and sets `credentialsSetAt`. Replaces the session: ' +
+      'the response sets a new `ngg.sid` and the previous cookie stops working.',
   })
   @ApiOkResponse({ schema: USER_RESPONSE_SCHEMA })
   @ApiResponse({ status: 400, description: 'Body fails validation.' })
@@ -157,8 +163,19 @@ export class AuthController {
   async setupCredentials(
     @CurrentUser() sessionUser: SessionUser,
     @Body() body: SetupCredentialsDto,
+    @Cookies(SESSION_COOKIE_NAME) cookieId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<UserDto> {
-    return this.authService.setupCredentials(sessionUser.id, body);
+    if (!cookieId) {
+      throw new UnauthorizedException({
+        code: 'NOT_SIGNED_IN',
+        message: 'Sign in first',
+      });
+    }
+    const { cookieId: nextCookieId, user } =
+      await this.authService.setupCredentials(sessionUser.id, body, cookieId);
+    this.setSessionCookie(res, nextCookieId);
+    return user;
   }
 
   /** Username + password sign-in; sets the session cookie. */
@@ -179,6 +196,12 @@ export class AuthController {
     schema: errorSchema('INVALID_CREDENTIALS'),
   })
   @ApiResponse({
+    status: 403,
+    description:
+      'This browser already has a User session whose Credential setup is not done.',
+    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+  })
+  @ApiResponse({
     status: 429,
     description: 'Too many failed tries; body includes `retryAfterSec`.',
     schema: errorSchema('TOO_MANY_ATTEMPTS'),
@@ -194,6 +217,7 @@ export class AuthController {
 
   /** Who am I: the signed-in User, or 401 NOT_SIGNED_IN. */
   @Get('me')
+  @SkipCredentialSetup()
   @UseGuards(SessionGuard)
   @ApiOperation({
     summary: 'Who am I',
@@ -214,6 +238,7 @@ export class AuthController {
   /** Deletes the User session and its pointer, and clears only `ngg.sid`. */
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @SkipCredentialSetup()
   @UseGuards(SessionGuard)
   @ApiOperation({
     summary: 'Log out',
@@ -228,12 +253,9 @@ export class AuthController {
     schema: errorSchema('NOT_SIGNED_IN'),
   })
   async logout(
-    @Req() req: Request,
+    @Cookies(SESSION_COOKIE_NAME) cookieId: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    const cookieId = (req.cookies as Record<string, string | undefined>)[
-      SESSION_COOKIE_NAME
-    ];
     if (cookieId) await this.authService.logout(cookieId);
     this.clearSessionCookie(res);
   }

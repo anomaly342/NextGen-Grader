@@ -46,13 +46,25 @@ export class SessionsService {
    * account's current session, or not `kind: USER`.
    */
   async getUserSession(cookieId: string): Promise<SessionUser | null> {
+    const payload = await this.findCurrentUserSession(cookieId);
+    if (!payload) return null;
+    return this.toSessionUser(payload);
+  }
+
+  /**
+   * The current User session behind `cookieId`, or null when it is not one.
+   * `credentialsSetAt` is the copy frozen when the session was opened.
+   */
+  async findCurrentUserSession(
+    cookieId: string,
+  ): Promise<SessionPayload | null> {
     const payload = await this.readPayload(cookieId);
     if (!payload || payload.kind !== 'USER') return null;
     const pointer = await this.redisService.get(
       this.buildPointerKey(payload.kind, payload.id),
     );
     if (pointer !== cookieId) return null;
-    return this.toSessionUser(payload);
+    return payload;
   }
 
   /** Deletes the session and, when it is still current, its pointer. */
