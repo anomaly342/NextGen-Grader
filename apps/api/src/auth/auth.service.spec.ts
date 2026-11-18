@@ -50,6 +50,7 @@ describe('AuthService', () => {
     jest.Mock
   >;
   let mockCreateSession: jest.Mock;
+  let mockDestroySession: jest.Mock;
   let mockBcrypt: { hash: jest.Mock; verify: jest.Mock };
 
   beforeEach(async () => {
@@ -72,6 +73,7 @@ describe('AuthService', () => {
       first: jest.fn().mockResolvedValue(inputUserRow),
     };
     mockCreateSession = jest.fn().mockResolvedValue('cookie-id');
+    mockDestroySession = jest.fn().mockResolvedValue(undefined);
     mockBcrypt = {
       hash: jest.fn().mockResolvedValue('$2b$12$hash'),
       verify: jest.fn().mockResolvedValue(true),
@@ -83,7 +85,10 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: { User: mockUser } },
         {
           provide: SessionsService,
-          useValue: { createSession: mockCreateSession },
+          useValue: {
+            createSession: mockCreateSession,
+            destroySession: mockDestroySession,
+          },
         },
         { provide: BcryptService, useValue: mockBcrypt },
         ClockService,
@@ -156,6 +161,36 @@ describe('AuthService', () => {
         }),
       });
       await expect(service.loginWithGoogle('code')).resolves.toBe('cookie-id');
+    });
+
+    it('opens a USER session started by Google', async () => {
+      await service.loginWithGoogle('code');
+      expect(mockCreateSession).toHaveBeenCalledWith({
+        kind: 'USER',
+        id: 1,
+        user: {
+          id: 1,
+          email: inputPayload.email,
+          name: inputPayload.name,
+          avatarUrl: inputPayload.picture,
+          role: 'STUDENT',
+        },
+        credentialsSetAt: inputUserRow.credentialsSetAt,
+        startedBy: 'GOOGLE',
+        lastLoginAt: expect.any(Date) as unknown,
+      });
+    });
+
+    it('records Credential setup as not done when credentialsSetAt is null', async () => {
+      mockUser.upsert.mockResolvedValue({
+        ...inputUserRow,
+        username: null,
+        credentialsSetAt: null,
+      });
+      await service.loginWithGoogle('code');
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ credentialsSetAt: null }),
+      );
     });
 
     it('asks Google to prefer university accounts', () => {
@@ -231,6 +266,15 @@ describe('AuthService', () => {
         user: expectedUserDto,
       });
       expect(mockUser.where).toHaveBeenCalledWith({ username: 'somchai_k' });
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'USER',
+          id: 1,
+          startedBy: 'PASSWORD',
+          lastLoginAt: null,
+          credentialsSetAt: inputUserRow.credentialsSetAt,
+        }),
+      );
     });
 
     it('401 INVALID_CREDENTIALS for a wrong password', async () => {
@@ -263,6 +307,43 @@ describe('AuthService', () => {
         UnauthorizedException,
       );
       expect(mockCreateSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getMe', () => {
+    const inputSessionUser = {
+      id: 1,
+      email: inputPayload.email,
+      name: inputPayload.name,
+      avatarUrl: inputPayload.picture,
+      role: 'STUDENT' as const,
+    };
+
+    it('returns the session Role and the username from the database', async () => {
+      mockUser.first.mockResolvedValue({
+        username: 'somchai_k',
+        credentialsSetAt: inputUserRow.credentialsSetAt,
+      });
+      const actualUser = await service.getMe(inputSessionUser);
+      expect(actualUser).toEqual(expectedUserDto);
+    });
+
+    it('401 NOT_SIGNED_IN when the User row is gone', async () => {
+      mockUser.first.mockResolvedValue(null);
+      const actualError = await service
+        .getMe(inputSessionUser)
+        .catch((error: unknown) => error);
+      expect(actualError).toBeInstanceOf(UnauthorizedException);
+      expect(
+        (actualError as UnauthorizedException).getResponse(),
+      ).toMatchObject({ code: 'NOT_SIGNED_IN' });
+    });
+  });
+
+  describe('logout', () => {
+    it('deletes the session', async () => {
+      await service.logout('cookie-id');
+      expect(mockDestroySession).toHaveBeenCalledWith('cookie-id');
     });
   });
 });

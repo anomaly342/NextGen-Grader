@@ -4,7 +4,7 @@ import { SessionGuard } from '@/common/guards/session.guard';
 import { SessionsService } from './sessions.service';
 
 /**
- * Session storage in Redis with JWT-encoded user bodies.
+ * Session storage in Redis: one current session per account per kind.
  * Owns the JWT setup; other modules use sessions through SessionsService
  * and protect routes with `@UseGuards(SessionGuard)`.
  */

@@ -8,6 +8,7 @@ import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
 import { BcryptService } from '@/bcrypt/bcrypt.service';
 import { ClockService } from '@/clock/clock.service';
 import { PrismaService } from '@/prisma/prisma.service';
+import { SessionRecord } from '@/sessions/interfaces/session-record.interface';
 import { SessionUser } from '@/sessions/interfaces/session-user.interface';
 import { SessionsService } from '@/sessions/sessions.service';
 import {
@@ -50,7 +51,7 @@ export class AuthService {
   async loginWithGoogle(code: string): Promise<string> {
     const profile = await this.fetchGoogleProfile(code);
     const user = await this.upsertUser(profile);
-    return this.sessionsService.createSession(user);
+    return this.openUserSession(user, 'GOOGLE', this.clockService.now());
   }
 
   /**
@@ -110,11 +111,39 @@ export class AuthService {
     await this.prismaService.User.where({ id: user.id }).update({
       lastLoginAt: this.clockService.now(),
     });
-    const cookieId = await this.sessionsService.createSession(
-      this.toSessionUser(user),
-    );
+    const cookieId = await this.openUserSession(user, 'PASSWORD', null);
     const { passwordHash: _, ...publicUser } = user;
     return { cookieId, user: publicUser };
+  }
+
+  /**
+   * The signed-in User. Display name, email, avatar and Role come from the
+   * session. Username and credentialsSetAt come from the database.
+   */
+  async getMe(sessionUser: SessionUser): Promise<UserDto> {
+    const row = await this.prismaService.User.where({ id: sessionUser.id })
+      .select('username', 'credentialsSetAt')
+      .first();
+    if (!row) {
+      throw new UnauthorizedException({
+        code: 'NOT_SIGNED_IN',
+        message: 'Sign in first',
+      });
+    }
+    return {
+      id: sessionUser.id,
+      email: sessionUser.email,
+      name: sessionUser.name,
+      avatarUrl: sessionUser.avatarUrl,
+      role: sessionUser.role,
+      username: row.username,
+      credentialsSetAt: row.credentialsSetAt,
+    };
+  }
+
+  /** Deletes the session behind `cookieId` and its pointer when it is still current. */
+  async logout(cookieId: string): Promise<void> {
+    await this.sessionsService.destroySession(cookieId);
   }
 
   /** Writes the credentials only if not set yet; null if they already were. */
@@ -187,14 +216,16 @@ export class AuthService {
   }
 
   /** Creates the user on first login, otherwise refreshes their profile and last login. */
-  private async upsertUser(profile: GoogleProfile): Promise<SessionUser> {
+  private async upsertUser(profile: GoogleProfile): Promise<UserDtoRow> {
     const lastLoginAt = this.clockService.now();
     return this.prismaService.User.select(
       'id',
       'email',
       'name',
+      'username',
       'avatarUrl',
       'role',
+      'credentialsSetAt',
     ).upsert({
       create: { ...profile, lastLoginAt },
       update: {
@@ -219,6 +250,22 @@ export class AuthService {
       sqlState === PG_UNIQUE_VIOLATION &&
       constraint === USERNAME_UNIQUE_CONSTRAINT
     );
+  }
+
+  /** Opens a User session, ending whatever session this User had. */
+  private openUserSession(
+    user: UserDtoRow,
+    startedBy: SessionRecord['startedBy'],
+    lastLoginAt: Date | null,
+  ): Promise<string> {
+    return this.sessionsService.createSession({
+      kind: 'USER',
+      id: user.id,
+      user: this.toSessionUser(user),
+      credentialsSetAt: user.credentialsSetAt,
+      startedBy,
+      lastLoginAt,
+    });
   }
 
   /** The user body stored in the session JWT. */

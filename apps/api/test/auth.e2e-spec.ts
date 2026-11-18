@@ -1,5 +1,11 @@
 import request, { type Response, type Test } from 'supertest';
 import type TestAgent from 'supertest/lib/agent';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { Redis } from 'ioredis';
+import { PrismaService } from '@/prisma/prisma.service';
+import { EXAMINEE_SESSION_COOKIE_NAME } from '@/sessions/sessions.constants';
+import { SessionsService } from '@/sessions/sessions.service';
 import { createE2eApp } from './support/e2e-app.util';
 import { E2E_WEB_URL } from './support/e2e-env.constants';
 import type { E2eApp } from './support/interfaces/e2e-app.interface';
@@ -282,5 +288,179 @@ describe('Auth (e2e)', () => {
         expect(findSessionCookie(actualResponse)).toBeUndefined();
       },
     );
+  });
+
+  describe('One session per User', () => {
+    const procedure = readFileSync(
+      join(__dirname, '../../../docs/ops/end-user-session.md'),
+      'utf8',
+    );
+
+    /** The JSON body of a 200 response, typed loosely for assertions. */
+    const readBody = async (pending: Test): Promise<unknown> => {
+      const response = (await pending.expect(200)) as { body: unknown };
+      return response.body;
+    };
+    const signInWithPassword = async (username: string): Promise<TestAgent> => {
+      const device = createDevice();
+      await device
+        .post('/auth/login')
+        .send({ username, password: PASSWORD })
+        .expect(200);
+      return device;
+    };
+
+    it('GET /auth/me returns the User when signed in and 401 when not', async () => {
+      await expectErrorCode(
+        createDevice().get('/auth/me'),
+        401,
+        'NOT_SIGNED_IN',
+      );
+      const device = createDevice();
+      await signInWithGoogle(device, {
+        email: STUDENT_EMAIL,
+        name: 'Somchai K.',
+      });
+      const actualUser = await readBody(device.get('/auth/me'));
+      expect(actualUser).toMatchObject({
+        email: STUDENT_EMAIL,
+        name: 'Somchai K.',
+        role: 'STUDENT',
+        username: null,
+        credentialsSetAt: null,
+      });
+      expect(actualUser).not.toHaveProperty('passwordHash');
+      await setupCredentials(device, 'somchai_k').expect(200);
+      const actualAfterSetup = await readBody(device.get('/auth/me'));
+      expect(actualAfterSetup).toMatchObject({
+        username: 'somchai_k',
+        credentialsSetAt: expect.any(String) as unknown,
+      });
+    });
+
+    it('signing in with Google on device B ends device A', async () => {
+      const deviceA = createDevice();
+      await signInWithGoogle(deviceA, { email: STUDENT_EMAIL });
+      const deviceB = createDevice();
+      await signInWithGoogle(deviceB, { email: STUDENT_EMAIL });
+      await expectErrorCode(deviceA.get('/auth/me'), 401, 'NOT_SIGNED_IN');
+      const actualUser = await readBody(deviceB.get('/auth/me'));
+      expect(actualUser).toMatchObject({ email: STUDENT_EMAIL });
+    });
+
+    it('signing in with a password on device B ends device A', async () => {
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const deviceA = await signInWithPassword('somchai_k');
+      const deviceB = await signInWithPassword('somchai_k');
+      await expectErrorCode(deviceA.get('/auth/me'), 401, 'NOT_SIGNED_IN');
+      const actualUser = await readBody(deviceB.get('/auth/me'));
+      expect(actualUser).toMatchObject({ username: 'somchai_k' });
+    });
+
+    it('two racing password sign-ins leave one live session', async () => {
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const deviceA = createDevice();
+      const deviceB = createDevice();
+      await Promise.all([
+        deviceA
+          .post('/auth/login')
+          .send({ username: 'somchai_k', password: PASSWORD }),
+        deviceB
+          .post('/auth/login')
+          .send({ username: 'somchai_k', password: PASSWORD }),
+      ]);
+      const [meA, meB] = await Promise.all([
+        deviceA.get('/auth/me'),
+        deviceB.get('/auth/me'),
+      ]);
+      const successes = [meA, meB].filter(
+        (response) => response.status === 200,
+      );
+      expect(successes).toHaveLength(1);
+    });
+
+    it('logout clears ngg.sid and the old cookie gets 401', async () => {
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = createDevice();
+      const loginResponse = await device
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+      const oldCookie = findSessionCookie(loginResponse)!.split(';')[0];
+      const logoutResponse = await device.post('/auth/logout').expect(204);
+      expect(findSessionCookie(logoutResponse)).toMatch(/^ngg\.sid=;/);
+      const setCookie = ([] as string[])
+        .concat(logoutResponse.headers['set-cookie'] ?? [])
+        .join('\n');
+      expect(setCookie).not.toContain(EXAMINEE_SESSION_COOKIE_NAME);
+      await expectErrorCode(device.get('/auth/me'), 401, 'NOT_SIGNED_IN');
+      const replay = await request(e2e.app.getHttpServer())
+        .get('/auth/me')
+        .set('Cookie', oldCookie);
+      expect(replay.status).toBe(401);
+      expect(replay.body).toMatchObject({ code: 'NOT_SIGNED_IN' });
+    });
+
+    it('a kind EXAMINEE session behind ngg.sid gets 401', async () => {
+      const cookieId = await e2e.app.get(SessionsService).createSession({
+        kind: 'EXAMINEE',
+        id: 7,
+        user: {
+          id: 7,
+          email: STUDENT_EMAIL,
+          name: 'Examinee',
+          avatarUrl: '',
+          role: 'STUDENT',
+        },
+        credentialsSetAt: null,
+        startedBy: 'PASSWORD',
+        lastLoginAt: null,
+      });
+      const response = await request(e2e.app.getHttpServer())
+        .get('/auth/me')
+        .set('Cookie', `ngg.sid=${cookieId}`);
+      expect(response.status).toBe(401);
+      expect(response.body).toMatchObject({ code: 'NOT_SIGNED_IN' });
+    });
+
+    it('ignores the reserved ngg.exam.sid cookie', async () => {
+      await expectErrorCode(
+        request(e2e.app.getHttpServer())
+          .get('/auth/me')
+          .set('Cookie', `${EXAMINEE_SESSION_COOKIE_NAME}=not-a-user-session`),
+        401,
+        'NOT_SIGNED_IN',
+      );
+    });
+
+    it('the Role-change procedure ends the session and the next sign-in has the new Role', async () => {
+      expect(procedure).toContain('GET ngg:session:pointer:USER:<id>');
+      expect(procedure).toContain('DEL ngg:session:<cookie-id>');
+      expect(procedure).toContain('DEL ngg:session:pointer:USER:<id>');
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword('somchai_k');
+      const before = (await readBody(device.get('/auth/me'))) as {
+        id: number;
+      };
+      expect(before).toMatchObject({ role: 'STUDENT' });
+      await e2e.app.get(PrismaService).User.where({ id: before.id }).update({
+        role: 'TEACHER',
+      });
+      const stillOld = await readBody(device.get('/auth/me'));
+      expect(stillOld).toMatchObject({ role: 'STUDENT' });
+      const redis = e2e.app.get(Redis);
+      const pointerKey = `ngg:session:pointer:USER:${before.id}`;
+      const cookieId = await redis.get(pointerKey);
+      if (!cookieId) throw new Error('procedure GET returned nil');
+      await redis.del(`ngg:session:${cookieId}`);
+      await redis.del(pointerKey);
+      await expectErrorCode(device.get('/auth/me'), 401, 'NOT_SIGNED_IN');
+      await device
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+      const actualUser = await readBody(device.get('/auth/me'));
+      expect(actualUser).toMatchObject({ role: 'TEACHER' });
+    });
   });
 });

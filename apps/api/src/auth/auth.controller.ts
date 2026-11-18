@@ -194,12 +194,66 @@ export class AuthController {
     return user;
   }
 
+  /** Who am I: the signed-in User, or 401 NOT_SIGNED_IN. */
+  @Get('me')
+  @UseGuards(SessionGuard)
+  @ApiOperation({
+    summary: 'Who am I',
+    description:
+      'The signed-in User. Display name, email, avatar and Role are the copies in the session. ' +
+      'Username and `credentialsSetAt` are read from the database and are null until Credential setup.',
+  })
+  @ApiOkResponse({ schema: USER_RESPONSE_SCHEMA })
+  @ApiResponse({
+    status: 401,
+    description: 'Not signed in, or `ngg.sid` is not a current User session.',
+    schema: errorSchema('NOT_SIGNED_IN'),
+  })
+  getMe(@CurrentUser() sessionUser: SessionUser): Promise<UserDto> {
+    return this.authService.getMe(sessionUser);
+  }
+
+  /** Deletes the User session and its pointer, and clears only `ngg.sid`. */
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(SessionGuard)
+  @ApiOperation({
+    summary: 'Log out',
+    description:
+      'Deletes this User session and its pointer, then clears only the `ngg.sid` cookie. ' +
+      'The reserved `ngg.exam.sid` cookie is not touched. Works before Credential setup.',
+  })
+  @ApiResponse({ status: 204, description: 'Signed out.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Not signed in.',
+    schema: errorSchema('NOT_SIGNED_IN'),
+  })
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    const cookieId = (req.cookies as Record<string, string | undefined>)[
+      SESSION_COOKIE_NAME
+    ];
+    if (cookieId) await this.authService.logout(cookieId);
+    this.clearSessionCookie(res);
+  }
+
   /** Sets the httpOnly session cookie for the whole site. */
   private setSessionCookie(res: Response, cookieId: string): void {
     res.cookie(SESSION_COOKIE_NAME, cookieId, {
       ...BASE_COOKIE_OPTIONS,
       path: '/',
       maxAge: SESSION_TTL_MS,
+    });
+  }
+
+  /** Clears only the User session cookie. Leaves `ngg.exam.sid` in place. */
+  private clearSessionCookie(res: Response): void {
+    res.clearCookie(SESSION_COOKIE_NAME, {
+      ...BASE_COOKIE_OPTIONS,
+      path: '/',
     });
   }
 }

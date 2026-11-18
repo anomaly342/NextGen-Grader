@@ -14,7 +14,9 @@ describe('AuthController', () => {
     | 'buildGoogleAuthUrl'
     | 'loginWithGoogle'
     | 'setupCredentials'
-    | 'loginWithPassword',
+    | 'loginWithPassword'
+    | 'getMe'
+    | 'logout',
     jest.Mock
   >;
   const expectedUser = {
@@ -42,6 +44,8 @@ describe('AuthController', () => {
       loginWithPassword: jest
         .fn()
         .mockResolvedValue({ cookieId: 'cookie-id', user: expectedUser }),
+      getMe: jest.fn().mockResolvedValue(expectedUser),
+      logout: jest.fn().mockResolvedValue(undefined),
     };
     mockRes = {
       cookie: jest.fn(),
@@ -135,5 +139,28 @@ describe('AuthController', () => {
       expect.objectContaining({ httpOnly: true, path: '/' }),
     );
     expect(actualBody).toEqual(expectedUser);
+  });
+
+  it('GET /auth/me returns the signed-in user', async () => {
+    const inputUser = { id: 1 } as never;
+    const actualBody = await controller.getMe(inputUser);
+    expect(mockAuth.getMe).toHaveBeenCalledWith(inputUser);
+    expect(actualBody).toEqual(expectedUser);
+  });
+
+  it('POST /auth/logout deletes the session and clears only ngg.sid', async () => {
+    await controller.logout(
+      { cookies: { [SESSION_COOKIE_NAME]: 'cookie-id' } } as unknown as Request,
+      mockRes as unknown as Response,
+    );
+    expect(mockAuth.logout).toHaveBeenCalledWith('cookie-id');
+    expect(mockRes.clearCookie).toHaveBeenCalledWith(
+      'ngg.sid',
+      expect.objectContaining({ path: '/' }),
+    );
+    const clearedNames = mockRes.clearCookie.mock.calls.map(
+      (call: unknown[]) => call[0],
+    );
+    expect(clearedNames).toEqual(['ngg.sid']);
   });
 });
