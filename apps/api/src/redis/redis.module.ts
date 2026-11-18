@@ -16,10 +16,10 @@ import { Redis } from 'ioredis';
   exports: [Redis],
 })
 export class RedisModule implements OnModuleDestroy {
-  constructor(private readonly redis: Redis) {}
+  constructor(private readonly redisService: Redis) {}
 
   /** Closes the Redis connection when Nest shuts down. */
   async onModuleDestroy(): Promise<void> {
-    await this.redis.quit();
+    await this.redisService.quit();
   }
 }

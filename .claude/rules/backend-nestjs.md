@@ -45,7 +45,7 @@ Generate code, corrections, and refactorings that comply with the basic principl
   - Avoid magic numbers and define constants.
 - Name injected dependencies after their type in camelCase:
   `prismaService: PrismaService`, `sessionsService: SessionsService`,
-  `jwtService: JwtService`, `redis: Redis`. Never shorten (`prisma`, `jwt`, `auth`).
+  `jwtService: JwtService`, `redisService: Redis`. Never shorten (`prisma`, `jwt`, `auth`).
 - Start each function with a verb.
 - Use verbs for boolean variables. Example: isLoading, hasError, canDelete, etc.
 - Use complete words instead of abbreviations and correct spelling.
@@ -83,6 +83,7 @@ Generate code, corrections, and refactorings that comply with the basic principl
 - Prefer immutability for data.
   - Use readonly for data that doesn't change.
   - Use as const for literals that don't change.
+- A field copied from a Prisma model uses that column's name and `ModelRow<'Model'>['field']`.
 
 ### Classes
 

@@ -36,10 +36,8 @@ import {
   OAUTH_STATE_COOKIE_NAME,
   OAUTH_STATE_TTL_MS,
 } from './auth.constants';
-import {
-  errorSchema,
-  USER_RESPONSE_SCHEMA,
-} from '@/common/swagger/swagger.constants';
+import { USER_RESPONSE_SCHEMA } from '@/common/swagger/swagger.constants';
+import { errorSchema } from '@/common/swagger/swagger.util';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
