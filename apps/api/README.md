@@ -55,7 +55,7 @@ $ npm run test
 # Each test starts from empty tables and an empty Redis db. Google is faked
 # (test/support/fake-google-oauth.service.ts) and the clock is movable
 # (test/support/fake-clock.service.ts). Override targets with
-# E2E_DATABASE_URL / E2E_REDIS_URL.
+# E2E_DATABASE_URL / E2E_REDIS_URL. Runs from apps/api or the repo root.
 $ bun run test:e2e
 
 # test coverage

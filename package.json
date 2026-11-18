@@ -9,6 +9,7 @@
     "dev": "turbo dev",
     "check-types": "turbo check-types",
     "test": "turbo test",
+    "test:e2e": "turbo test:e2e --ui=stream",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"
