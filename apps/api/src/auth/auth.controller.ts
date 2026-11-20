@@ -166,15 +166,9 @@ export class AuthController {
   async setupCredentials(
     @CurrentUser() sessionUser: SessionUser,
     @Body() body: SetupCredentialsDto,
-    @Cookies(SESSION_COOKIE_NAME) cookieId: string | undefined,
+    @Cookies(SESSION_COOKIE_NAME) cookieId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<UserDto> {
-    if (!cookieId) {
-      throw new UnauthorizedException({
-        code: 'NOT_SIGNED_IN',
-        message: 'Sign in first',
-      });
-    }
     const { cookieId: nextCookieId, user } =
       await this.authService.setupCredentials(sessionUser.id, body, cookieId);
     this.setSessionCookie(res, nextCookieId);
@@ -344,15 +338,9 @@ export class AuthController {
   })
   async resetPassword(
     @CurrentUser() sessionUser: SessionUser,
-    @Cookies(SESSION_COOKIE_NAME) cookieId: string | undefined,
+    @Cookies(SESSION_COOKIE_NAME) cookieId: string,
     @Body() body: ResetPasswordDto,
   ): Promise<void> {
-    if (!cookieId) {
-      throw new UnauthorizedException({
-        code: 'NOT_SIGNED_IN',
-        message: 'Sign in first',
-      });
-    }
     await this.authService.resetPassword(sessionUser.id, body, cookieId);
   }
 
@@ -374,10 +362,10 @@ export class AuthController {
     schema: errorSchema('NOT_SIGNED_IN'),
   })
   async logout(
-    @Cookies(SESSION_COOKIE_NAME) cookieId: string | undefined,
+    @Cookies(SESSION_COOKIE_NAME) cookieId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    if (cookieId) await this.authService.logout(cookieId);
+    await this.authService.logout(cookieId);
     this.clearSessionCookie(res);
   }
 

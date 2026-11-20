@@ -3,9 +3,10 @@ import type { SessionRequest } from '@/sessions/interfaces/session-request.inter
 import type { SessionUser } from '@/sessions/interfaces/session-user.interface';
 
 /** The signed-in user. Use only on routes behind `@UseGuards(SessionGuard)`. */
-export const CurrentUser = createParamDecorator(
-  (_data: unknown, context: ExecutionContext): SessionUser => {
-    const req = context.switchToHttp().getRequest<SessionRequest>();
-    return req.sessionUser!;
-  },
-);
+export const CurrentUser = createParamDecorator(function readSessionUser(
+  _data: unknown,
+  context: ExecutionContext,
+): SessionUser {
+  const req = context.switchToHttp().getRequest<SessionRequest>();
+  return req.sessionUser!;
+});

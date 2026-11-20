@@ -178,9 +178,9 @@ describe('AuthController', () => {
       'ngg.sid',
       expect.objectContaining({ path: '/' }),
     );
-    const clearedNames = mockRes.clearCookie.mock.calls.map(
+    const actualClearedNames = mockRes.clearCookie.mock.calls.map(
       (call: unknown[]) => call[0],
     );
-    expect(clearedNames).toEqual(['ngg.sid']);
+    expect(actualClearedNames).toEqual(['ngg.sid']);
   });
 });

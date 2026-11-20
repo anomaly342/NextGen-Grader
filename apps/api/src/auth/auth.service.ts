@@ -71,10 +71,7 @@ export class AuthService {
     { username, password }: SetupCredentialsDto,
     cookieId: string,
   ): Promise<LoginResult> {
-    const current = await this.sessionsService.findCurrentUserSession(cookieId);
-    if (!current || current.id !== userId) {
-      throw this.createNotSignedInError();
-    }
+    const current = await this.requireCurrentUserSession(cookieId, userId);
     const passwordHash = await this.bcryptService.hash(password);
     const user = await this.claimCredentials(userId, username, passwordHash);
     if (!user) {
@@ -209,10 +206,7 @@ export class AuthService {
     { newPassword }: ResetPasswordDto,
     cookieId: string,
   ): Promise<void> {
-    const session = await this.sessionsService.findCurrentUserSession(cookieId);
-    if (!session || session.id !== userId) {
-      throw this.createNotSignedInError();
-    }
+    const session = await this.requireCurrentUserSession(cookieId, userId);
     if (!this.isRecentGoogleSignIn(session)) {
       throw new ForbiddenException({
         code: 'RECENT_GOOGLE_SIGN_IN_REQUIRED',
@@ -283,6 +277,16 @@ export class AuthService {
       code: 'USERNAME_TAKEN',
       message: 'That username is taken',
     });
+  }
+
+  /** The current User session, or 401 when this cookie is not that User's. */
+  private async requireCurrentUserSession(
+    cookieId: string,
+    userId: number,
+  ): Promise<SessionPayload> {
+    const current = await this.sessionsService.findCurrentUserSession(cookieId);
+    if (!current || current.id !== userId) throw this.createNotSignedInError();
+    return current;
   }
 
   /** The 401 for a request whose session no longer matches a signed-in User. */
