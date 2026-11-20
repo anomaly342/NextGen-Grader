@@ -70,10 +70,6 @@ Generate code, corrections, and refactorings that comply with the basic principl
   - Use arrow functions for simple functions (less than 3 instructions).
   - Use named functions for non-simple functions.
 - Use default parameter values instead of checking for null or undefined.
-- Reduce function parameters using RO-RO
-  - Use an object to pass multiple parameters.
-  - Use an object to return results.
-  - Declare necessary types for input arguments and output.
 - Use a single level of abstraction.
 
 ### Data
