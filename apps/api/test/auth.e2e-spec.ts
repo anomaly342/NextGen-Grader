@@ -535,6 +535,151 @@ describe('Auth (e2e)', () => {
     });
   });
 
+  describe('Changing the username', () => {
+    /** Signs in with `username` and the shared password and returns that device. */
+    const signInWithPassword = async (username: string): Promise<TestAgent> => {
+      const device = createDevice();
+      await device
+        .post('/auth/login')
+        .send({ username, password: PASSWORD })
+        .expect(200);
+      return device;
+    };
+
+    /** PATCH /auth/username on `device`. */
+    const changeUsername = (device: TestAgent, username: string): Test =>
+      device.patch('/auth/username').send({ username });
+
+    it('renames: login works with the new username and fails with the old one', async () => {
+      // Given a User signed in as "somchai_k"
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword('somchai_k');
+      // When they rename to "somchai_new"
+      const { body: actualUser } = (await changeUsername(
+        device,
+        'somchai_new',
+      ).expect(200)) as { body: unknown };
+      // Then the response and the database carry the new username
+      expect(actualUser).toMatchObject({
+        email: STUDENT_EMAIL,
+        username: 'somchai_new',
+      });
+      expect(actualUser).not.toHaveProperty('passwordHash');
+      // And the old username no longer signs in, the new one does
+      await expectErrorCode(
+        createDevice()
+          .post('/auth/login')
+          .send({ username: 'somchai_k', password: PASSWORD }),
+        401,
+        'INVALID_CREDENTIALS',
+      );
+      await signInWithPassword('somchai_new');
+    });
+
+    it('the current session keeps working after the rename', async () => {
+      // Given a User signed in as "somchai_k"
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword('somchai_k');
+      // When they rename
+      await changeUsername(device, 'somchai_new').expect(200);
+      // Then the same cookie still works and shows the new username
+      const actualMe = await device.get('/auth/me').expect(200);
+      expect(actualMe.body).toMatchObject({ username: 'somchai_new' });
+      // And they can rename again (no limit)
+      await changeUsername(device, 'somchai_3').expect(200);
+    });
+
+    it('409 USERNAME_TAKEN when another User has the username', async () => {
+      // Given two Users, "somchai_k" and "other_one"
+      await createUserWithCredentials(OTHER_STUDENT_EMAIL, 'other_one');
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword('somchai_k');
+      // When "somchai_k" tries to take "other_one"
+      await expectErrorCode(
+        changeUsername(device, 'other_one'),
+        409,
+        'USERNAME_TAKEN',
+      );
+      // Then nothing changed
+      await signInWithPassword('somchai_k');
+    });
+
+    it.each(['Somchai_K', 'som-chai', 'abc', 'a'.repeat(21), 'สมชาย_k'])(
+      '400 for the invalid username %s',
+      async (inputUsername) => {
+        // Given a User signed in as "somchai_k"
+        await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+        const device = await signInWithPassword('somchai_k');
+        // When they pick a username that breaks the setup rules
+        await changeUsername(device, inputUsername).expect(400);
+        // Then the old username still signs in
+        await signInWithPassword('somchai_k');
+      },
+    );
+
+    it('another User can take the old username right after the rename', async () => {
+      // Given "somchai_k" renamed to "somchai_new"
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword('somchai_k');
+      await changeUsername(device, 'somchai_new').expect(200);
+      // When another User sets up Credentials with "somchai_k"
+      // Then it is free
+      await createUserWithCredentials(OTHER_STUDENT_EMAIL, 'somchai_k');
+    });
+
+    it('two Users swapping usernames at the same time never both win and never 500', async () => {
+      // Given two Users, "user_a" and "user_b"
+      await createUserWithCredentials(STUDENT_EMAIL, 'user_a');
+      await createUserWithCredentials(OTHER_STUDENT_EMAIL, 'user_b');
+      const deviceA = await signInWithPassword('user_a');
+      const deviceB = await signInWithPassword('user_b');
+      // When each takes the other's username at the same moment
+      const [actualA, actualB] = await Promise.all([
+        changeUsername(deviceA, 'user_b'),
+        changeUsername(deviceB, 'user_a'),
+      ]);
+      // Then each request is either 200 or 409 USERNAME_TAKEN, never a server error
+      for (const actual of [actualA, actualB]) {
+        expect([200, 409]).toContain(actual.status);
+        if (actual.status === 409) {
+          expect(actual.body).toMatchObject({ code: 'USERNAME_TAKEN' });
+        }
+      }
+      // And the two usernames are still different
+      const [meA, meB] = await Promise.all([
+        deviceA.get('/auth/me').expect(200),
+        deviceB.get('/auth/me').expect(200),
+      ]);
+      const { username: actualUsernameA } = meA.body as { username: string };
+      const { username: actualUsernameB } = meB.body as { username: string };
+      expect(actualUsernameA).not.toBe(actualUsernameB);
+    });
+
+    it('401 NOT_SIGNED_IN without a session', async () => {
+      // Given a device with no session
+      // When it tries to change a username
+      // Then it is refused
+      await expectErrorCode(
+        changeUsername(createDevice(), 'somchai_new'),
+        401,
+        'NOT_SIGNED_IN',
+      );
+    });
+
+    it('refuses a username change before Credential setup', async () => {
+      // Given a Google session that has not finished Credential setup
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      // When they try to change the username
+      // Then the setup gate refuses it
+      await expectErrorCode(
+        changeUsername(device, 'somchai_new'),
+        403,
+        'CREDENTIAL_SETUP_REQUIRED',
+      );
+    });
+  });
+
   describe('Changing and resetting a password', () => {
     const NEW_PASSWORD = 'new-password-456';
     const TEN_MINUTES_MS = 10 * 60 * 1000;

@@ -386,6 +386,67 @@ describe('AuthService', () => {
     });
   });
 
+  describe('changeUsername', () => {
+    const inputSessionUser = {
+      id: 1,
+      email: inputPayload.email,
+      name: inputPayload.name,
+      avatarUrl: inputPayload.picture,
+      role: 'STUDENT' as const,
+    };
+
+    it('stores the new username and returns the User without touching the session', async () => {
+      mockUser.update.mockResolvedValue({
+        username: 'somchai_new',
+        credentialsSetAt: inputUserRow.credentialsSetAt,
+      });
+      const actualUser = await service.changeUsername(inputSessionUser, {
+        username: 'somchai_new',
+      });
+      expect(actualUser).toEqual({
+        ...expectedUserDto,
+        username: 'somchai_new',
+      });
+      expect(mockUser.where).toHaveBeenCalledWith({ id: 1 });
+      expect(mockUser.update).toHaveBeenCalledWith({ username: 'somchai_new' });
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockDestroySession).not.toHaveBeenCalled();
+    });
+
+    it('409 USERNAME_TAKEN on a unique violation of User.username', async () => {
+      mockUser.update.mockRejectedValue({
+        sqlState: '23505',
+        constraint: 'User_username_key',
+      });
+      const actualError = await service
+        .changeUsername(inputSessionUser, { username: 'other_one' })
+        .catch((error: unknown) => error);
+      expect(actualError).toBeInstanceOf(ConflictException);
+      expect((actualError as ConflictException).getResponse()).toMatchObject({
+        code: 'USERNAME_TAKEN',
+      });
+    });
+
+    it('rethrows unrelated database errors', async () => {
+      const inputError = new Error('connection lost');
+      mockUser.update.mockRejectedValue(inputError);
+      await expect(
+        service.changeUsername(inputSessionUser, { username: 'somchai_new' }),
+      ).rejects.toBe(inputError);
+    });
+
+    it('401 NOT_SIGNED_IN when the User row is gone', async () => {
+      mockUser.update.mockResolvedValue(null);
+      const actualError = await service
+        .changeUsername(inputSessionUser, { username: 'somchai_new' })
+        .catch((error: unknown) => error);
+      expect(actualError).toBeInstanceOf(UnauthorizedException);
+      expect(
+        (actualError as UnauthorizedException).getResponse(),
+      ).toMatchObject({ code: 'NOT_SIGNED_IN' });
+    });
+  });
+
   describe('logout', () => {
     it('deletes the session', async () => {
       await service.logout('cookie-id');

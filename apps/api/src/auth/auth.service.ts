@@ -21,6 +21,7 @@ import {
   USERNAME_UNIQUE_CONSTRAINT,
 } from './auth.constants';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ChangeUsernameDto } from './dto/change-username.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
@@ -29,7 +30,7 @@ import { LoginResult } from './interfaces/login-result.interface';
 import { UserDto } from './dto/user.dto';
 import { UserDtoRow } from './dto/user-dto-row.dto';
 
-/** Sign-in, Credential setup, and password change or reset. */
+/** Sign-in, Credential setup, username change, and password change or reset. */
 @Injectable()
 export class AuthService {
   constructor(
@@ -143,21 +144,27 @@ export class AuthService {
     const row = await this.prismaService.User.where({ id: sessionUser.id })
       .select('username', 'credentialsSetAt')
       .first();
-    if (!row) {
-      throw new UnauthorizedException({
-        code: 'NOT_SIGNED_IN',
-        message: 'Sign in first',
-      });
+    return this.toUserDto(sessionUser, row);
+  }
+
+  /**
+   * Changes the User's username (sign-in handle). The old username is free for others at once, there is
+   * no limit on how often, and the session stays (it does not carry the username).
+   * Uniqueness is enforced by the database: a taken username is 409.
+   */
+  async changeUsername(
+    sessionUser: SessionUser,
+    { username }: ChangeUsernameDto,
+  ): Promise<UserDto> {
+    try {
+      const row = await this.prismaService.User.where({ id: sessionUser.id })
+        .select('username', 'credentialsSetAt')
+        .update({ username });
+      return this.toUserDto(sessionUser, row);
+    } catch (error) {
+      if (this.isUsernameTaken(error)) throw this.createUsernameTakenError();
+      throw error;
     }
-    return {
-      id: sessionUser.id,
-      email: sessionUser.email,
-      name: sessionUser.name,
-      avatarUrl: sessionUser.avatarUrl,
-      role: sessionUser.role,
-      username: row.username,
-      credentialsSetAt: row.credentialsSetAt,
-    };
   }
 
   /**
@@ -262,14 +269,42 @@ export class AuthService {
           credentialsSetAt: this.clockService.now(),
         });
     } catch (error) {
-      if (this.isUsernameTaken(error)) {
-        throw new ConflictException({
-          code: 'USERNAME_TAKEN',
-          message: 'That username is taken',
-        });
-      }
+      if (this.isUsernameTaken(error)) throw this.createUsernameTakenError();
       throw error;
     }
+  }
+
+  /** The 409 for a username another User already has. */
+  private createUsernameTakenError(): ConflictException {
+    return new ConflictException({
+      code: 'USERNAME_TAKEN',
+      message: 'That username is taken',
+    });
+  }
+
+  /**
+   * The User as the API returns it: profile and Role from the session,
+   * username and credentialsSetAt from the database row. No row is 401.
+   */
+  private toUserDto(
+    sessionUser: SessionUser,
+    row: Pick<UserDto, 'username' | 'credentialsSetAt'> | null,
+  ): UserDto {
+    if (!row) {
+      throw new UnauthorizedException({
+        code: 'NOT_SIGNED_IN',
+        message: 'Sign in first',
+      });
+    }
+    return {
+      id: sessionUser.id,
+      email: sessionUser.email,
+      name: sessionUser.name,
+      avatarUrl: sessionUser.avatarUrl,
+      role: sessionUser.role,
+      username: row.username,
+      credentialsSetAt: row.credentialsSetAt,
+    };
   }
 
   /** Exchanges `code` for tokens and reads the verified profile from the ID token. */

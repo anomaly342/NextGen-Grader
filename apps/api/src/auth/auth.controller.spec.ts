@@ -16,6 +16,7 @@ describe('AuthController', () => {
     | 'setupCredentials'
     | 'loginWithPassword'
     | 'getMe'
+    | 'changeUsername'
     | 'logout',
     jest.Mock
   >;
@@ -45,6 +46,7 @@ describe('AuthController', () => {
         .fn()
         .mockResolvedValue({ cookieId: 'cookie-id', user: expectedUser }),
       getMe: jest.fn().mockResolvedValue(expectedUser),
+      changeUsername: jest.fn().mockResolvedValue(expectedUser),
       logout: jest.fn().mockResolvedValue(undefined),
     };
     mockRes = {
@@ -157,6 +159,16 @@ describe('AuthController', () => {
     const actualBody = await controller.getMe(inputUser);
     expect(mockAuth.getMe).toHaveBeenCalledWith(inputUser);
     expect(actualBody).toEqual(expectedUser);
+  });
+
+  it('PATCH /auth/username changes the username and leaves ngg.sid alone', async () => {
+    const inputUser = { id: 1 } as never;
+    const inputBody = { username: 'somchai_new' };
+    const actualBody = await controller.changeUsername(inputUser, inputBody);
+    expect(mockAuth.changeUsername).toHaveBeenCalledWith(inputUser, inputBody);
+    expect(actualBody).toEqual(expectedUser);
+    expect(mockRes.cookie).not.toHaveBeenCalled();
+    expect(mockRes.clearCookie).not.toHaveBeenCalled();
   });
 
   it('POST /auth/logout deletes the session and clears only ngg.sid', async () => {

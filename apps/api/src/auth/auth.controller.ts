@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Query,
   Res,
@@ -41,13 +42,14 @@ import { USER_RESPONSE_SCHEMA } from '@/common/swagger/swagger.constants';
 import { errorSchema } from '@/common/swagger/swagger.util';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ChangeUsernameDto } from './dto/change-username.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
 import type { UserDto } from './dto/user.dto';
 import type { GoogleAuthUrl } from './interfaces/google-auth-url.interface';
 
-/** Sign-in routes: Google OAuth, Credential setup, login, and password change or reset. */
+/** Sign-in routes: Google OAuth, Credential setup, login, username change, and password change or reset. */
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -235,6 +237,40 @@ export class AuthController {
   })
   getMe(@CurrentUser() sessionUser: SessionUser): Promise<UserDto> {
     return this.authService.getMe(sessionUser);
+  }
+
+  /** Changes the signed-in User's username (sign-in handle). The current session stays signed in. */
+  @Patch('username')
+  @UseGuards(SessionGuard)
+  @ApiOperation({
+    summary: 'Change username',
+    description:
+      'Signed in, Credential setup done. Body is the new username (same rules as setup: ' +
+      '4–20 chars, `a-z`, `0-9`, `_`; capitals are rejected, not converted). No limit on how often. ' +
+      'The old username is free for others at once. Success keeps this session.',
+  })
+  @ApiOkResponse({ schema: USER_RESPONSE_SCHEMA })
+  @ApiResponse({ status: 400, description: 'The username fails the rules.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Not signed in.',
+    schema: errorSchema('NOT_SIGNED_IN'),
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Credential setup is not done.',
+    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Another User has that username.',
+    schema: errorSchema('USERNAME_TAKEN'),
+  })
+  changeUsername(
+    @CurrentUser() sessionUser: SessionUser,
+    @Body() body: ChangeUsernameDto,
+  ): Promise<UserDto> {
+    return this.authService.changeUsername(sessionUser, body);
   }
 
   /** Replaces the password. The current session stays signed in. */
