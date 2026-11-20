@@ -39,6 +39,13 @@ describe('AuthService', () => {
     role: 'STUDENT',
     credentialsSetAt: inputUserRow.credentialsSetAt,
   };
+  const inputSessionUser = {
+    id: 1,
+    email: inputPayload.email,
+    name: inputPayload.name,
+    avatarUrl: inputPayload.picture,
+    role: 'STUDENT' as const,
+  };
   let service: AuthService;
   let mockGoogle: {
     generateAuthUrl: jest.Mock;
@@ -357,14 +364,6 @@ describe('AuthService', () => {
   });
 
   describe('getMe', () => {
-    const inputSessionUser = {
-      id: 1,
-      email: inputPayload.email,
-      name: inputPayload.name,
-      avatarUrl: inputPayload.picture,
-      role: 'STUDENT' as const,
-    };
-
     it('returns the session Role and the username from the database', async () => {
       mockUser.first.mockResolvedValue({
         username: 'somchai_k',
@@ -387,14 +386,6 @@ describe('AuthService', () => {
   });
 
   describe('changeUsername', () => {
-    const inputSessionUser = {
-      id: 1,
-      email: inputPayload.email,
-      name: inputPayload.name,
-      avatarUrl: inputPayload.picture,
-      role: 'STUDENT' as const,
-    };
-
     it('stores the new username and returns the User without touching the session', async () => {
       mockUser.update.mockResolvedValue({
         username: 'somchai_new',

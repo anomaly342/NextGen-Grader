@@ -72,10 +72,7 @@ export class AuthService {
   ): Promise<LoginResult> {
     const current = await this.sessionsService.findCurrentUserSession(cookieId);
     if (!current || current.id !== userId) {
-      throw new UnauthorizedException({
-        code: 'NOT_SIGNED_IN',
-        message: 'Sign in first',
-      });
+      throw this.createNotSignedInError();
     }
     const passwordHash = await this.bcryptService.hash(password);
     const user = await this.claimCredentials(userId, username, passwordHash);
@@ -144,6 +141,7 @@ export class AuthService {
     const row = await this.prismaService.User.where({ id: sessionUser.id })
       .select('username', 'credentialsSetAt')
       .first();
+    if (!row) throw this.createNotSignedInError();
     return this.toUserDto(sessionUser, row);
   }
 
@@ -156,11 +154,20 @@ export class AuthService {
     sessionUser: SessionUser,
     { username }: ChangeUsernameDto,
   ): Promise<UserDto> {
+    const row = await this.renameUser(sessionUser.id, username);
+    if (!row) throw this.createNotSignedInError();
+    return this.toUserDto(sessionUser, row);
+  }
+
+  /** Writes the new username; null if the User row is gone. A taken username is 409. */
+  private async renameUser(
+    userId: number,
+    username: string,
+  ): Promise<Pick<UserDto, 'username' | 'credentialsSetAt'> | null> {
     try {
-      const row = await this.prismaService.User.where({ id: sessionUser.id })
+      return await this.prismaService.User.where({ id: userId })
         .select('username', 'credentialsSetAt')
         .update({ username });
-      return this.toUserDto(sessionUser, row);
     } catch (error) {
       if (this.isUsernameTaken(error)) throw this.createUsernameTakenError();
       throw error;
@@ -205,10 +212,7 @@ export class AuthService {
   ): Promise<void> {
     const session = await this.sessionsService.findCurrentUserSession(cookieId);
     if (!session || session.id !== userId) {
-      throw new UnauthorizedException({
-        code: 'NOT_SIGNED_IN',
-        message: 'Sign in first',
-      });
+      throw this.createNotSignedInError();
     }
     if (!this.isRecentGoogleSignIn(session)) {
       throw new ForbiddenException({
@@ -282,20 +286,22 @@ export class AuthService {
     });
   }
 
+  /** The 401 for a request whose session no longer matches a signed-in User. */
+  private createNotSignedInError(): UnauthorizedException {
+    return new UnauthorizedException({
+      code: 'NOT_SIGNED_IN',
+      message: 'Sign in first',
+    });
+  }
+
   /**
    * The User as the API returns it: profile and Role from the session,
-   * username and credentialsSetAt from the database row. No row is 401.
+   * username and credentialsSetAt from the database row.
    */
   private toUserDto(
     sessionUser: SessionUser,
-    row: Pick<UserDto, 'username' | 'credentialsSetAt'> | null,
+    row: Pick<UserDto, 'username' | 'credentialsSetAt'>,
   ): UserDto {
-    if (!row) {
-      throw new UnauthorizedException({
-        code: 'NOT_SIGNED_IN',
-        message: 'Sign in first',
-      });
-    }
     return {
       id: sessionUser.id,
       email: sessionUser.email,
