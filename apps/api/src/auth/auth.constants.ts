@@ -31,6 +31,9 @@ export const USERNAME_PATTERN = /^[a-z0-9_]+$/;
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 72;
 
+/** How long after a Google sign-in a forgotten-password reset is allowed. */
+export const PASSWORD_RESET_WINDOW_MS = 10 * 60 * 1000;
+
 /** POST /auth/login rate limit: this many tries per window, per IP and per username. */
 export const LOGIN_RATE_LIMIT = 5;
 export const LOGIN_RATE_TTL_MS = 60 * 1000;

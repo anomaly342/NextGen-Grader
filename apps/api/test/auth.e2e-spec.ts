@@ -534,4 +534,197 @@ describe('Auth (e2e)', () => {
       expect(actualUser).toMatchObject({ role: 'TEACHER' });
     });
   });
+
+  describe('Changing and resetting a password', () => {
+    const NEW_PASSWORD = 'new-password-456';
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+    /** Signs in with the shared password and returns that device. */
+    const signInWithPassword = async (): Promise<TestAgent> => {
+      const device = createDevice();
+      await device
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+      return device;
+    };
+
+    /** The old password is refused at login and the new one signs in. */
+    const expectPasswordSwapped = async (): Promise<void> => {
+      const actualOldLogin = await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD });
+      expect(actualOldLogin.status).toBe(401);
+      expect(actualOldLogin.body).toMatchObject({
+        code: 'INVALID_CREDENTIALS',
+      });
+      await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: NEW_PASSWORD })
+        .expect(200);
+    };
+
+    it('change with the right current password: old fails, new works, this session stays', async () => {
+      // Given a User signed in with their password
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword();
+      // When they change it
+      await device
+        .post('/auth/password')
+        .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD })
+        .expect(204);
+      // Then this cookie still works, the old password fails, and the new one works
+      await device.get('/auth/me').expect(200);
+      await expectPasswordSwapped();
+    });
+
+    it('change with a wrong current password is 401 and leaves the password as it was', async () => {
+      // Given a User signed in with their password
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword();
+      // When they send the wrong current password
+      await expectErrorCode(
+        device.post('/auth/password').send({
+          currentPassword: 'wrong-password',
+          newPassword: NEW_PASSWORD,
+        }),
+        401,
+        'INVALID_CREDENTIALS',
+      );
+      // Then this session stays and the password is unchanged
+      await device.get('/auth/me').expect(200);
+      await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+      const actualNewLogin = await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: NEW_PASSWORD });
+      expect(actualNewLogin.status).toBe(401);
+      expect(actualNewLogin.body).toMatchObject({
+        code: 'INVALID_CREDENTIALS',
+      });
+    });
+
+    it('rejects a new password outside the setup length rules and leaves the old one', async () => {
+      // Given a User signed in with their password
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword();
+      const inputTooLong = 'a'.repeat(73);
+      // When the new password is shorter than 8 or longer than 72
+      await device
+        .post('/auth/password')
+        .send({ currentPassword: PASSWORD, newPassword: 'short' })
+        .expect(400);
+      await device
+        .post('/auth/password')
+        .send({ currentPassword: PASSWORD, newPassword: inputTooLong })
+        .expect(400);
+      // Then the old password still signs in
+      await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+    });
+
+    it('refuses a password change before Credential setup', async () => {
+      // Given a Google session that has not finished Credential setup
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      // When they try to change the password
+      await expectErrorCode(
+        device.post('/auth/password').send({
+          currentPassword: PASSWORD,
+          newPassword: NEW_PASSWORD,
+        }),
+        403,
+        'CREDENTIAL_SETUP_REQUIRED',
+      );
+    });
+
+    it('reset within 10 minutes of a Google sign-in works without the old password', async () => {
+      // Given a session started by Google, Credential setup just finished
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      await setupCredentials(device, 'somchai_k').expect(200);
+      // When they set a new password without the old one
+      await device
+        .post('/auth/password/reset')
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(204);
+      // Then this session stays, the old password fails, and the new one works
+      await device.get('/auth/me').expect(200);
+      await expectPasswordSwapped();
+    });
+
+    it('reset 10 minutes after the Google sign-in is 403 and leaves the password', async () => {
+      // Given a Google session whose sign-in is now 10 minutes ago
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      await setupCredentials(device, 'somchai_k').expect(200);
+      e2e.clock.advance(TEN_MINUTES_MS);
+      // When they try to reset
+      await expectErrorCode(
+        device.post('/auth/password/reset').send({ newPassword: NEW_PASSWORD }),
+        403,
+        'RECENT_GOOGLE_SIGN_IN_REQUIRED',
+      );
+      // Then the password is unchanged
+      await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+    });
+
+    it('rejects a reset password outside the setup length rules', async () => {
+      // Given a fresh Google session
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      await setupCredentials(device, 'somchai_k').expect(200);
+      const inputTooLong = 'a'.repeat(73);
+      // When the new password is shorter than 8 or longer than 72
+      await device
+        .post('/auth/password/reset')
+        .send({ newPassword: 'short' })
+        .expect(400);
+      await device
+        .post('/auth/password/reset')
+        .send({ newPassword: inputTooLong })
+        .expect(400);
+      // Then the old password still signs in
+      await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+    });
+
+    it('refuses a password reset before Credential setup', async () => {
+      // Given a Google session that has not finished Credential setup
+      const device = createDevice();
+      await signInWithGoogle(device, { email: STUDENT_EMAIL });
+      // When they try to reset
+      await expectErrorCode(
+        device.post('/auth/password/reset').send({ newPassword: NEW_PASSWORD }),
+        403,
+        'CREDENTIAL_SETUP_REQUIRED',
+      );
+    });
+
+    it('reset from a session started with a password is 403', async () => {
+      // Given a session started with a password
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+      const device = await signInWithPassword();
+      // When they try to reset without the old password
+      await expectErrorCode(
+        device.post('/auth/password/reset').send({ newPassword: NEW_PASSWORD }),
+        403,
+        'RECENT_GOOGLE_SIGN_IN_REQUIRED',
+      );
+      // Then the password is unchanged
+      await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD })
+        .expect(200);
+    });
+  });
 });

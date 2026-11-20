@@ -8,6 +8,7 @@ import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
 import { BcryptService } from '@/bcrypt/bcrypt.service';
 import { ClockService } from '@/clock/clock.service';
 import { PrismaService } from '@/prisma/prisma.service';
+import { SessionPayload } from '@/sessions/interfaces/session-payload.interface';
 import { SessionRecord } from '@/sessions/interfaces/session-record.interface';
 import { SessionUser } from '@/sessions/interfaces/session-user.interface';
 import { SessionsService } from '@/sessions/sessions.service';
@@ -15,17 +16,20 @@ import {
   ALLOWED_EMAIL_DOMAIN,
   DUMMY_PASSWORD_HASH,
   GOOGLE_SCOPES,
+  PASSWORD_RESET_WINDOW_MS,
   PG_UNIQUE_VIOLATION,
   USERNAME_UNIQUE_CONSTRAINT,
 } from './auth.constants';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
 import { GoogleProfile } from './interfaces/google-profile.interface';
 import { LoginResult } from './interfaces/login-result.interface';
 import { UserDto } from './dto/user.dto';
 import { UserDtoRow } from './dto/user-dto-row.dto';
 
-/** Sign-in: Google OAuth, first-login credential setup, and username/password login. */
+/** Sign-in, Credential setup, and password change or reset. */
 @Injectable()
 export class AuthService {
   constructor(
@@ -156,9 +160,82 @@ export class AuthService {
     };
   }
 
+  /**
+   * Replaces the password when `currentPassword` matches.
+   * A wrong current password is 401 and leaves the hash as it was.
+   * The current session stays.
+   */
+  async changePassword(
+    userId: number,
+    { currentPassword, newPassword }: ChangePasswordDto,
+  ): Promise<void> {
+    const user = await this.prismaService.User.where({ id: userId })
+      .select('passwordHash')
+      .first();
+    const isCurrentPasswordValid = await this.bcryptService.verify(
+      currentPassword,
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!user?.passwordHash || !isCurrentPasswordValid) {
+      throw new UnauthorizedException({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Wrong password',
+      });
+    }
+    await this.replacePassword(userId, newPassword);
+  }
+
+  /**
+   * Replaces the password without the current one.
+   * Allowed only when this session was started by a Google sign-in less than
+   * 10 minutes ago. Every password-started session is refused.
+   * The current session stays.
+   */
+  async resetPassword(
+    userId: number,
+    { newPassword }: ResetPasswordDto,
+    cookieId: string,
+  ): Promise<void> {
+    const session = await this.sessionsService.findCurrentUserSession(cookieId);
+    if (!session || session.id !== userId) {
+      throw new UnauthorizedException({
+        code: 'NOT_SIGNED_IN',
+        message: 'Sign in first',
+      });
+    }
+    if (!this.isRecentGoogleSignIn(session)) {
+      throw new ForbiddenException({
+        code: 'RECENT_GOOGLE_SIGN_IN_REQUIRED',
+        message: 'Sign in with your University account again',
+      });
+    }
+    await this.replacePassword(userId, newPassword);
+  }
+
   /** Deletes the session behind `cookieId` and its pointer when it is still current. */
   async logout(cookieId: string): Promise<void> {
     await this.sessionsService.destroySession(cookieId);
+  }
+
+  /** Stores a new password hash. Does not touch the session. */
+  private async replacePassword(
+    userId: number,
+    password: string,
+  ): Promise<void> {
+    await this.prismaService.User.where({ id: userId }).update({
+      passwordHash: await this.bcryptService.hash(password),
+    });
+  }
+
+  /** True when `lastLoginAt` is a Google sign-in still inside the reset window. */
+  private isRecentGoogleSignIn(session: SessionPayload): boolean {
+    if (session.startedBy !== 'GOOGLE' || session.lastLoginAt == null) {
+      return false;
+    }
+    const ageMs =
+      this.clockService.now().getTime() -
+      new Date(session.lastLoginAt).getTime();
+    return ageMs < PASSWORD_RESET_WINDOW_MS;
   }
 
   /** Writes the credentials only if not set yet; null if they already were. */

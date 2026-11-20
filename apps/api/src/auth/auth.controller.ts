@@ -40,12 +40,14 @@ import {
 import { USER_RESPONSE_SCHEMA } from '@/common/swagger/swagger.constants';
 import { errorSchema } from '@/common/swagger/swagger.util';
 import { AuthService } from './auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
 import type { UserDto } from './dto/user.dto';
 import type { GoogleAuthUrl } from './interfaces/google-auth-url.interface';
 
-/** Sign-in routes: Google OAuth, first-login setup, username/password login. */
+/** Sign-in routes: Google OAuth, Credential setup, login, and password change or reset. */
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -233,6 +235,85 @@ export class AuthController {
   })
   getMe(@CurrentUser() sessionUser: SessionUser): Promise<UserDto> {
     return this.authService.getMe(sessionUser);
+  }
+
+  /** Replaces the password. The current session stays signed in. */
+  @Post('password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(SessionGuard)
+  @ApiOperation({
+    summary: 'Change password',
+    description:
+      'Signed in, Credential setup done. Body is the current password and a new one ' +
+      '(same length rules as setup). A wrong current password is 401 `INVALID_CREDENTIALS` ' +
+      'and the stored password is unchanged. Success keeps this session.',
+  })
+  @ApiResponse({
+    status: 204,
+    description: 'Password changed. This session stays signed in.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'The new password fails the length rules.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Not signed in, or the current password is wrong.',
+    schema: errorSchema('INVALID_CREDENTIALS'),
+  })
+  async changePassword(
+    @CurrentUser() sessionUser: SessionUser,
+    @Body() body: ChangePasswordDto,
+  ): Promise<void> {
+    await this.authService.changePassword(sessionUser.id, body);
+  }
+
+  /**
+   * Sets a new password without the current one, only within 10 minutes of
+   * the Google sign-in that started this session.
+   */
+  @Post('password/reset')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(SessionGuard)
+  @ApiOperation({
+    summary: 'Reset a forgotten password',
+    description:
+      'Signed in, Credential setup done. Body is the new password (same length rules as setup). ' +
+      'Allowed only when this session was started by a Google sign-in less than 10 minutes ago. ' +
+      'Otherwise 403 `RECENT_GOOGLE_SIGN_IN_REQUIRED`, including every session started with a password. ' +
+      'Success keeps this session.',
+  })
+  @ApiResponse({
+    status: 204,
+    description: 'Password reset. This session stays signed in.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'The new password fails the length rules.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Not signed in.',
+    schema: errorSchema('NOT_SIGNED_IN'),
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'This session was not started by a Google sign-in in the last 10 minutes.',
+    schema: errorSchema('RECENT_GOOGLE_SIGN_IN_REQUIRED'),
+  })
+  async resetPassword(
+    @CurrentUser() sessionUser: SessionUser,
+    @Cookies(SESSION_COOKIE_NAME) cookieId: string | undefined,
+    @Body() body: ResetPasswordDto,
+  ): Promise<void> {
+    if (!cookieId) {
+      throw new UnauthorizedException({
+        code: 'NOT_SIGNED_IN',
+        message: 'Sign in first',
+      });
+    }
+    await this.authService.resetPassword(sessionUser.id, body, cookieId);
   }
 
   /** Deletes the User session and its pointer, and clears only `ngg.sid`. */
