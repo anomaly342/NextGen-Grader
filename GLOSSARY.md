@@ -108,8 +108,8 @@ A test case's share of the Problem's maximum score. A Try's score, before a late
 _Avoid_: Priority, rank
 
 **Section**:
-A group of students within one Classroom. It has a join code of five characters.
-_Avoid_: Group, cohort, class
+A group of students within one Classroom, with a five-character join code and a fixed section number starting at 1. Removing a Section does not change the other numbers.
+_Avoid_: Group, cohort, class, index
 
 **Join code**:
 The five-character code of a Section. A User enters it to enroll in that one Section.

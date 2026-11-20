@@ -1,27 +1,38 @@
 ---
 paths:
   - "apps/web/**/*.{ts,tsx,css}"
+  - "apps/exam/**/*.{ts,tsx,css}"
+  - "packages/ui/**/*.{ts,tsx,css}"
+  - "packages/lib/**/*.{ts,tsx}"
 ---
 
-# Frontend (apps/web)
+# Frontend
 
-## Routing (App Router)
+See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 
-Route groups match the spec:
-- Public: `/login`, `/setup`, `/exam/login`
-- Student: `/classrooms`, `/classrooms/[classroomId]/{assignments,practice,scores}`,
-  `/classrooms/[classroomId]/problems/[problemId]`, `/classrooms/[classroomId]/submissions/[submissionId]`
-- Teacher: `/teach`, `/teach/classrooms/...`, `/teach/exams/[examId]/...`, `/admin/users`
-- Exam: `/exam`, `/exam/problems/[problemId]`, `/exam/results` (examinee cookie only)
+## Apps
 
-Middleware redirects: no session → `/login`; credentials not set → `/setup`; examinee cookie on a non-exam
-route → `/exam`. Hide the Practice tab when the classroom is `ALL_MANDATORY`.
+- `apps/web` is the Classroom site. Route groups do not appear in the URL.
+  - Public: `/login`, `/setup`
+  - Student: `/classrooms`, `/classrooms/[classroomId]/sections/<section number>/...`,
+    `/problems/[problemId]`, `/submissions/[submissionId]`
+  - Teacher: `/teach`, `/teach/classrooms/...`, `/admin/users`
+- `apps/exam` is the exam site. One deployment serves each Classroom-year host (`data2026.grader.com`).
+  Pages: `/login`, `/problems/[problemId]`. No Classroom or Teacher routes.
+- Middleware on `apps/web`: no session → `/login`; credential setup unfinished → `/setup`.
+  It does not handle an Examinee. Hide the Practice tab when the Classroom is all-mandatory.
+- The exam-room network does not route to the Classroom host. That filter is outside this repo.
 
 ## Data
 
-- All server state goes through TanStack Query with one typed API client (`lib/api.ts`). No `fetch` in components.
+- Shared UI is `packages/ui`. Components take props. They do not fetch. shadcn lives under `packages/ui`.
+  Area components are grouped by area (`dashboard/dashboard-list.tsx`).
+- `packages/lib` holds pure helpers, the API client, and the socket. Clients use relative URLs.
+  They do not know the Nest host. Each app's `next.config` rewrites `/api` to Nest `/api/v1` and proxies the socket.
+  No `app/api` proxy route handlers. The apps do not import each other.
+- All server state goes through TanStack Query via that client. No `fetch` in components.
 - Query keys are arrays starting with the resource: `['classroom', id]`, `['submissions', { problemId }]`.
-- Socket events update or invalidate queries in one place (`lib/realtime.ts`); components do not subscribe to sockets directly.
+- Socket events update or invalidate queries in the shared client. Components do not subscribe to sockets directly.
 - Switch on the backend's error `code`, not on message text. Keep a map from code to user-facing text.
 - Show times in Asia/Bangkok; send and receive ISO UTC.
 - Never compute anything that decides access, deadlines or scores on the client; show what the API returns.
@@ -47,4 +58,4 @@ route → `/exam`. Hide the Practice tab when the classroom is `ALL_MANDATORY`.
 ## Components
 
 - Pages are server components that render client components for interactive parts.
-- Keep domain display logic (score text for each grading mode, level badges) in `lib/format/*` with unit tests.
+- Keep domain display logic (score text for each grading mode, level badges) in `packages/lib` with unit tests.
