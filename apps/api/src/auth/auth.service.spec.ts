@@ -312,13 +312,13 @@ describe('AuthService', () => {
   describe('loginWithPassword', () => {
     const inputBody = { username: 'Somchai_K', password: 'password123' };
 
-    it('signs in, lowercases the username and returns the user', async () => {
+    it('signs in, looks up the username exactly as typed and returns the user', async () => {
       const actualResult = await service.loginWithPassword(inputBody);
       expect(actualResult).toEqual({
         cookieId: 'cookie-id',
         user: expectedUserDto,
       });
-      expect(mockUser.where).toHaveBeenCalledWith({ username: 'somchai_k' });
+      expect(mockUser.where).toHaveBeenCalledWith({ username: 'Somchai_K' });
       expect(mockCreateSession).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: 'USER',

@@ -18,13 +18,13 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { Cookies } from '@/common/decorators/cookies.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { SkipCredentialSetup } from '@/common/decorators/skip-credential-setup.decorator';
 import type { SessionUser } from '@/sessions/interfaces/session-user.interface';
+import { LoginThrottlerGuard } from '@/common/guards/login-throttler.guard';
 import { SessionGuard } from '@/common/guards/session.guard';
 import {
   SESSION_COOKIE_NAME,
@@ -32,8 +32,6 @@ import {
 } from '@/sessions/sessions.constants';
 import {
   BASE_COOKIE_OPTIONS,
-  LOGIN_RATE_LIMIT,
-  LOGIN_RATE_TTL_MS,
   GOOGLE_AUTH_PATH,
   OAUTH_STATE_COOKIE_NAME,
   OAUTH_STATE_TTL_MS,
@@ -185,13 +183,14 @@ export class AuthController {
   /** Username + password sign-in; sets the session cookie. */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: LOGIN_RATE_LIMIT, ttl: LOGIN_RATE_TTL_MS } })
+  @UseGuards(LoginThrottlerGuard)
   @ApiOperation({
     summary: 'Sign in with username and password',
     description:
       'For returning users who finished setup. Sets the httpOnly `ngg.sid` session cookie. ' +
-      'Rate limit: 5 tries per minute per IP.',
+      'The username must match exactly: different capitals are 401. ' +
+      'Rate limit: 5 tries per minute per username (capitals ignored, so case variants share ' +
+      'one counter) and 100 tries per minute per IP.',
   })
   @ApiOkResponse({ schema: USER_RESPONSE_SCHEMA })
   @ApiResponse({
@@ -207,8 +206,12 @@ export class AuthController {
   })
   @ApiResponse({
     status: 429,
-    description: 'Too many failed tries; body includes `retryAfterSec`.',
-    schema: errorSchema('TOO_MANY_ATTEMPTS'),
+    description:
+      'Too many tries for this username or from this IP. Body includes `retryAfterSec`; ' +
+      'the `Retry-After` header carries the same value.',
+    schema: errorSchema('TOO_MANY_ATTEMPTS', {
+      retryAfterSec: { type: 'integer', example: 42 },
+    }),
   })
   async loginWithPassword(
     @Body() body: LoginDto,

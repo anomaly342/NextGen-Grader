@@ -359,6 +359,103 @@ describe('Auth (e2e)', () => {
         expect(findSessionCookie(actualResponse)).toBeUndefined();
       },
     );
+
+    it('matches the username exactly: different capitals are 401 INVALID_CREDENTIALS', async () => {
+      // Given the User somchai_k
+      // When someone signs in as Somchai_K with the right password
+      const actualResponse = await createDevice()
+        .post('/auth/login')
+        .send({ username: 'Somchai_K', password: PASSWORD });
+      // Then it is refused like any wrong username
+      expect(actualResponse.status).toBe(401);
+      expect(actualResponse.body).toMatchObject({
+        code: 'INVALID_CREDENTIALS',
+      });
+      expect(findSessionCookie(actualResponse)).toBeUndefined();
+    });
+  });
+
+  describe('Login rate limit', () => {
+    /** One failed password sign-in as `username` from a fresh device on the shared lab IP. */
+    const failLogin = (username: string): Test =>
+      createDevice()
+        .post('/auth/login')
+        .send({ username, password: 'wrong-password' });
+
+    beforeEach(async () => {
+      await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
+    });
+
+    it('the 6th failed try on one username within a minute is 429 TOO_MANY_ATTEMPTS with retryAfterSec', async () => {
+      // Given 5 failed tries on somchai_k
+      for (let i = 0; i < 5; i++) await failLogin('somchai_k').expect(401);
+      // When a 6th try comes in, even with the right password
+      const actualResponse = await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD });
+      // Then it is refused with how long to wait
+      expect(actualResponse.status).toBe(429);
+      expect(actualResponse.body).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
+      const { retryAfterSec } = actualResponse.body as {
+        retryAfterSec: number;
+      };
+      expect(retryAfterSec).toBeGreaterThan(0);
+      expect(retryAfterSec).toBeLessThanOrEqual(60);
+      expect(findSessionCookie(actualResponse)).toBeUndefined();
+    });
+
+    it('case variants of one username share the same counter', async () => {
+      // Given 5 failed tries spread over capitalisations of somchai_k
+      for (const inputUsername of [
+        'somchai_k',
+        'Somchai_K',
+        'SOMCHAI_K',
+        'somchai_K',
+        'Somchai_k',
+      ]) {
+        await failLogin(inputUsername).expect(401);
+      }
+      // When the real username tries again
+      // Then it is already over the limit
+      await expectErrorCode(
+        createDevice()
+          .post('/auth/login')
+          .send({ username: 'somchai_k', password: PASSWORD }),
+        429,
+        'TOO_MANY_ATTEMPTS',
+      );
+    });
+
+    it('failed tries on one username do not block a different username from the same IP', async () => {
+      // Given another student in the same lab, and somchai_k locked out
+      await createUserWithCredentials(OTHER_STUDENT_EMAIL, 'malee_s');
+      for (let i = 0; i < 5; i++) await failLogin('somchai_k').expect(401);
+      await failLogin('somchai_k').expect(429);
+      // When the other student signs in from the same IP
+      // Then they get in
+      await createDevice()
+        .post('/auth/login')
+        .send({ username: 'malee_s', password: PASSWORD })
+        .expect(200);
+    });
+
+    it('the 101st try within a minute from one IP is 429, whatever the username', async () => {
+      // Given 100 failed tries from one IP, each on a different username
+      const actualStatuses = await Promise.all(
+        Array.from({ length: 100 }, (_, i) =>
+          failLogin(`student_${i}`).then(({ status }) => status),
+        ),
+      );
+      expect(new Set(actualStatuses)).toEqual(new Set([401]));
+      // When a fresh username tries from the same IP, even with the right password
+      // Then the IP is over its limit
+      const actualResponse = await createDevice()
+        .post('/auth/login')
+        .send({ username: 'somchai_k', password: PASSWORD });
+      expect(actualResponse.status).toBe(429);
+      expect(actualResponse.body).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
+      expect(actualResponse.body).toHaveProperty('retryAfterSec');
+    }, 60_000);
   });
 
   describe('One session per User', () => {

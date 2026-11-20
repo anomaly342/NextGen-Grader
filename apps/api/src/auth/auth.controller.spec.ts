@@ -1,6 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { LoginThrottlerGuard } from '@/common/guards/login-throttler.guard';
 import type { Response } from 'express';
 import { SessionGuard } from '@/common/guards/session.guard';
 import { SESSION_COOKIE_NAME } from '@/sessions/sessions.constants';
@@ -60,7 +60,7 @@ describe('AuthController', () => {
     })
       .overrideGuard(SessionGuard)
       .useValue({ canActivate: () => true })
-      .overrideGuard(ThrottlerGuard)
+      .overrideGuard(LoginThrottlerGuard)
       .useValue({ canActivate: () => true })
       .compile();
     controller = module.get(AuthController);

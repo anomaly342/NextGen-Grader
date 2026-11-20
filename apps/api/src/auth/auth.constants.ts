@@ -34,9 +34,18 @@ export const PASSWORD_MAX_LENGTH = 72;
 /** How long after a Google sign-in a forgotten-password reset is allowed. */
 export const PASSWORD_RESET_WINDOW_MS = 10 * 60 * 1000;
 
-/** POST /auth/login rate limit: this many tries per window, per IP and per username. */
-export const LOGIN_RATE_LIMIT = 5;
+/**
+ * POST /auth/login rate limits, each per one-minute window. Per username (any
+ * capitals share one counter) so one student's lockout doesn't block a lab that
+ * shares one IP address; per IP as a looser cap on guessing across usernames.
+ */
 export const LOGIN_RATE_TTL_MS = 60 * 1000;
+export const LOGIN_USERNAME_RATE_LIMIT = 5;
+export const LOGIN_IP_RATE_LIMIT = 100;
+
+/** Names of the two login throttlers registered with ThrottlerModule. */
+export const LOGIN_IP_THROTTLER = 'ip';
+export const LOGIN_USERNAME_THROTTLER = 'username';
 
 /**
  * bcrypt hash of a random throwaway password. Login verifies against it when the

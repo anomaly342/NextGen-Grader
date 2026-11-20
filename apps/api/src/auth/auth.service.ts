@@ -91,17 +91,15 @@ export class AuthService {
   }
 
   /**
-   * Username + password sign-in. Unknown username and wrong password give the
-   * same 401 and take the same time. Rate-limited by the controller (@Throttle).
+   * Username + password sign-in. The username must match exactly (no case folding).
+   * Unknown username and wrong password give the same 401 and take the same time.
+   * Rate-limited by the controller (LoginThrottlerGuard).
    */
   async loginWithPassword({
     username,
     password,
   }: LoginDto): Promise<LoginResult> {
-    const normalizedUsername = username.toLowerCase();
-    const user = await this.prismaService.User.where({
-      username: normalizedUsername,
-    })
+    const user = await this.prismaService.User.where({ username })
       .select(
         'id',
         'email',
