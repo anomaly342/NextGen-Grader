@@ -3,164 +3,41 @@ paths:
   - 'apps/api/**/*.ts'
 ---
 
-You are a senior TypeScript programmer with experience in the NestJS framework and a preference for clean programming and design patterns.
+# API (apps/api, NestJS)
 
-Generate code, corrections, and refactorings that comply with the basic principles and nomenclature.
+Where code goes and what it's called. `bun run lint` runs `scripts/check-file-names.mjs`, which enforces the
+rules marked _(checked)_. Style rules applied at review time live in `CODING_STANDARDS.md`.
 
-## TypeScript General Guidelines
+## Files and folders
 
-### Basic Principles
+- One module per domain, folder and files named after it: plural when countable (`sessions/`,
+  `SessionsModule`), singular when uncountable or infrastructure (`auth`, `redis`, `prisma`). Types for one
+  item stay singular (`SessionUser`).
+- File names are `<kebab-name>.<kind>.ts` _(checked)_. Kinds: `module`, `controller`, `service`, `guard`,
+  `interceptor`, `decorator`, `filter`, `pipe`, `middleware`, `dto`, `interface`, `constants`, `util`,
+  `setup`, plus `.spec.ts` next to the file it tests and `.e2e-spec.ts` in `test/`.
+- Every type named `…Dto` goes in `dto/` as `.dto.ts` _(checked)_: request bodies are class-validator classes
+  (`LoginDto`), responses and their row shapes too (`UserDto`, `UserDtoRow`).
+- Every other data type, `type` aliases included, goes in `interfaces/` as `.interface.ts` _(checked)_.
+- One export per file; only `.constants.ts` may export several _(checked)_.
+- `src/common/` holds shared code, one folder per kind: `guards/`, `decorators/`, `swagger/`, `utils/`.
+  **Every** guard and decorator lives there, even one only a single module uses today; such a guard may
+  import that module's constants (`login-throttler.guard.ts` → `@/auth/auth.constants`).
+- Helpers used by one class are `private` methods of it _(checked for services)_. Helpers shared across
+  modules go in `src/common/utils/`.
+- `test/support/` (e2e doubles and helpers) mirrors `src/`'s layout, with shared types in
+  `test/support/interfaces/`.
 
-- Use English for all code and documentation.
-- Always declare the type of each variable and function (parameters and return value).
-  - Avoid using any.
-  - Create necessary types.
-- Use JSDoc to document public classes and methods.
-- Don't leave blank lines within a function.
-- One export per file.
+## Imports and injection
 
-### Nomenclature
+- Across modules import with `@/` (`@/sessions/sessions.service`), never `../` _(checked in `src/`)_. `./`
+  is for the same folder. Inside `test/`, `../` between test files is fine; reach `src/` through `@/`.
+- Name an injected dependency after its type in camelCase, never shortened: `prismaService: PrismaService`,
+  `redisService: Redis`, `jwtService: JwtService` _(checked for those three)_.
+- Persist through `PrismaService` (models come from the `@repo/prisma` contract); no entity classes. A field
+  copied from a Prisma model keeps the column's name and type `ModelRow<'Model'>['field']`.
 
-- Use PascalCase for classes.
-- Use camelCase for variables, functions, and methods.
-- Use kebab-case for file and directory names.
-- Import across modules with the `@/` alias (`@/*` → `src/*`), never `../`:
-  `import { SessionsService } from '@/sessions/sessions.service'`.
-  Use `./` only for files in the same module folder.
-- End every file name with a suffix for its kind: `<name>.<kind>.ts`.
-  - `.module.ts`, `.controller.ts`, `.service.ts`, `.guard.ts`, `.interceptor.ts`,
-    `.decorator.ts`, `.filter.ts`, `.pipe.ts`, `.middleware.ts`
-  - `.dto.ts` in `dto/` for every DTO: request bodies (`login.dto.ts`) and any type
-    named `…Dto`, including responses and their row shapes (`user.dto.ts`,
-    `user-dto-row.dto.ts`)
-  - `.interface.ts` in `interfaces/` for every other data type, including `type`
-    aliases (e.g. `sessions/interfaces/session-user.interface.ts`)
-  - `.constants.ts` for shared constants, `.util.ts` for helpers
-  - `.spec.ts` for tests, next to the file they test
-- Use UPPERCASE for environment variables.
-  - Avoid magic numbers and define constants.
-- Name injected dependencies after their type in camelCase:
-  `prismaService: PrismaService`, `sessionsService: SessionsService`,
-  `jwtService: JwtService`, `redis: Redis`. Never shorten (`prisma`, `jwt`, `auth`).
-- Start each function with a verb.
-- Use verbs for boolean variables. Example: isLoading, hasError, canDelete, etc.
-- Use complete words instead of abbreviations and correct spelling.
-  - Except for standard abbreviations like API, URL, etc.
-  - Except for well-known abbreviations:
-    - i, j for loops
-    - err for errors
-    - ctx for contexts
-    - req, res, next for middleware function parameters
+## Tests
 
-### Functions
-
-- In this context, what is understood as a function will also apply to a method.
-- Write short functions with a single purpose. Less than 20 instructions.
-- Name functions with a verb and something else.
-  - If it returns a boolean, use isX or hasX, canX, etc.
-  - If it doesn't return anything, use executeX or saveX, etc.
-- Avoid nesting blocks by:
-  - Early checks and returns.
-  - Extraction to utility functions.
-- Use higher-order functions (map, filter, reduce, etc.) to avoid function nesting.
-  - Use arrow functions for simple functions (less than 3 instructions).
-  - Use named functions for non-simple functions.
-- Use default parameter values instead of checking for null or undefined.
-- Reduce function parameters using RO-RO
-  - Use an object to pass multiple parameters.
-  - Use an object to return results.
-  - Declare necessary types for input arguments and output.
-- Use a single level of abstraction.
-
-### Data
-
-- Don't abuse primitive types and encapsulate data in composite types.
-- Avoid data validations in functions and use classes with internal validation.
-- Prefer immutability for data.
-  - Use readonly for data that doesn't change.
-  - Use as const for literals that don't change.
-
-### Classes
-
-- Helpers used by one class are `private` methods of that class, not module-level
-  functions/arrow consts in the same file (e.g. `private toUserDto(row)`).
-  Helpers shared across modules go in `src/common/utils/`.
-- Follow SOLID principles.
-- Prefer composition over inheritance.
-- Declare interfaces to define contracts.
-- Write small classes with a single purpose.
-  - Less than 200 instructions.
-  - Less than 10 public methods.
-  - Less than 10 properties.
-
-### Exceptions
-
-- Use exceptions to handle errors you don't expect.
-- If you catch an exception, it should be to:
-  - Fix an expected problem.
-  - Add context.
-  - Otherwise, use a global handler.
-
-### Testing
-
-- Follow the Arrange-Act-Assert convention for tests.
-- Name test variables clearly.
-  - Follow the convention: inputX, mockX, actualX, expectedX, etc.
-- Write unit tests for each public function.
-  - Use test doubles to simulate dependencies.
-    - Except for third-party dependencies that are not expensive to execute.
-- Write acceptance tests for each module.
-  - Follow the Given-When-Then convention.
-
-  ## Specific to NestJS
-
-  ### Basic Principles
-  - Use modular architecture.
-  - Encapsulate the API in modules.
-    - One module per main domain/route.
-    - Name modules after the plural when the domain is countable: folder `sessions/`,
-      files `sessions.module.ts` / `sessions.service.ts`, classes `SessionsModule` /
-      `SessionsService`. Uncountable or infrastructure names stay singular (`auth`,
-      `redis`, `prisma`). Types for one item stay singular (`SessionUser`).
-    - One controller for its route.
-      - And other controllers for secondary routes.
-    - A `dto` folder for every DTO: if it's named `…Dto`, it goes here.
-      - Request bodies are classes validated with class-validator (`LoginDto`).
-      - Response DTOs and their row shapes too (`UserDto`, `UserDtoRow`).
-    - An `interfaces` folder for every other data type: internal shapes, payloads,
-      response wrappers (e.g. `sessions/interfaces/session-user.interface.ts`).
-      Don't use a `models` folder.
-    - A services module with business logic and persistence.
-      - Persist through `PrismaService` (models come from the `@repo/prisma` contract);
-        don't write entity classes.
-      - One service per model.
-
-  - Common Module: Create a common module (e.g., @app/common) for shared, reusable code across the application.
-    - Lives in `src/common/`, one folder per kind. All guards go in `src/common/guards/`
-      (e.g. `session.guard.ts`) and all decorators in `src/common/decorators/`
-      (e.g. `current-user.decorator.ts`), even if only one module uses them today.
-      Shared Swagger/OpenAPI schemas and helpers go in `src/common/swagger/`.
-    - This module should include:
-      - Configs: Global configuration settings.
-      - Decorators: Custom decorators for reusability.
-      - DTOs: Common data transfer objects.
-      - Guards: Guards for role-based or permission-based access control.
-      - Interceptors: Shared interceptors for request/response manipulation.
-      - Notifications: Modules for handling app-wide notifications.
-      - Services: Services that are reusable across modules.
-      - Types: Common TypeScript types or interfaces.
-      - Utils: Helper functions and utilities.
-      - Validators: Custom validators for consistent input validation.
-
-  - Core module functionalities:
-    - Global filters for exception handling.
-    - Global middlewares for request management.
-    - Guards for permission management.
-    - Interceptors for request processing.
-
-### Testing
-
-- Use the standard Jest framework for testing.
-- Write tests for each controller and service.
-- Write end to end tests for each api module.
-- Add a admin/test method to each controller as a smoke test.
+- Which tests to write is agreed per task at seams (the `tdd` skill), not one per function or class.
+- Name test variables `inputX`, `mockX`, `actualX`, `expectedX`. E2E tests use Given-When-Then comments.

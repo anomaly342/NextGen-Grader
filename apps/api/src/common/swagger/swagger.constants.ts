@@ -1,7 +1,7 @@
 import type { ApiOkResponse } from '@nestjs/swagger';
 
 /** OpenAPI schema type (not exported by @nestjs/swagger, so taken from its decorator). */
-type SchemaObject = NonNullable<
+export type SchemaObject = NonNullable<
   Extract<Parameters<typeof ApiOkResponse>[0], { schema?: unknown }>['schema']
 >;
 
@@ -35,12 +35,3 @@ export const USER_RESPONSE_SCHEMA: SchemaObject = {
     },
   },
 };
-
-/** OpenAPI schema of an error body with a machine-readable `code`. */
-export const errorSchema = (code: string): SchemaObject => ({
-  type: 'object',
-  properties: {
-    code: { type: 'string', example: code },
-    message: { type: 'string' },
-  },
-});

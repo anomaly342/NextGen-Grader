@@ -1,2 +1,26 @@
-bun run check-types --ui=stream
-bun run test --ui=stream
+# Type-check, lint and unit-test only the workspaces with staged changes,
+# plus the workspaces that depend on them. Root build config runs everything.
+# Commits with no workspace or root config changes (docs, .claude, ...) skip checks.
+
+staged=$(git diff --cached --name-only --diff-filter=ACMRD)
+filters=""
+
+if echo "$staged" | grep -qE '^(package\.json|bun\.lock|turbo\.json)$'; then
+  echo "pre-commit: root config staged, checking every workspace"
+else
+  for dir in apps/* packages/*; do
+    if [ -f "$dir/package.json" ] && echo "$staged" | grep -q "^$dir/"; then
+      name=$(node -p "require('./$dir/package.json').name")
+      filters="$filters --filter=...$name"
+    fi
+  done
+  if [ -z "$filters" ]; then
+    echo "pre-commit: no workspace files staged, skipping checks"
+    exit 0
+  fi
+  echo "pre-commit: checking$filters"
+fi
+
+bun run check-types --ui=stream $filters
+bun run lint --ui=stream $filters
+bun run test --ui=stream $filters

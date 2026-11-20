@@ -1,5 +1,10 @@
 # NextGen Grader
 
+## Commits
+
+Conventional Commits 1.0.0. Scopes: `api`, `web`, `prisma`, `ci`, `deps`, `docs`.
+Example: `feat(api): change username via PATCH /auth/username`
+
 ## Agent skills
 
 ### Issue tracker

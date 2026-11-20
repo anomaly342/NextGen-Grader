@@ -1,7 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ThrottlerGuard } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
+import { LoginThrottlerGuard } from '@/common/guards/login-throttler.guard';
+import type { Response } from 'express';
 import { SessionGuard } from '@/common/guards/session.guard';
 import { SESSION_COOKIE_NAME } from '@/sessions/sessions.constants';
 import { OAUTH_STATE_COOKIE_NAME } from './auth.constants';
@@ -14,7 +14,10 @@ describe('AuthController', () => {
     | 'buildGoogleAuthUrl'
     | 'loginWithGoogle'
     | 'setupCredentials'
-    | 'loginWithPassword',
+    | 'loginWithPassword'
+    | 'getMe'
+    | 'changeUsername'
+    | 'logout',
     jest.Mock
   >;
   const expectedUser = {
@@ -28,9 +31,6 @@ describe('AuthController', () => {
     redirect: jest.Mock;
   };
 
-  const createRequest = (state?: string): Request =>
-    ({ cookies: { [OAUTH_STATE_COOKIE_NAME]: state } }) as unknown as Request;
-
   beforeEach(async () => {
     process.env['WEB_URL'] = 'http://localhost:3000';
     mockAuth = {
@@ -38,10 +38,16 @@ describe('AuthController', () => {
         (state: string) => `https://google/?state=${state}`,
       ),
       loginWithGoogle: jest.fn().mockResolvedValue('cookie-id'),
-      setupCredentials: jest.fn().mockResolvedValue(expectedUser),
+      setupCredentials: jest.fn().mockResolvedValue({
+        cookieId: 'cookie-id',
+        user: expectedUser,
+      }),
       loginWithPassword: jest
         .fn()
         .mockResolvedValue({ cookieId: 'cookie-id', user: expectedUser }),
+      getMe: jest.fn().mockResolvedValue(expectedUser),
+      changeUsername: jest.fn().mockResolvedValue(expectedUser),
+      logout: jest.fn().mockResolvedValue(undefined),
     };
     mockRes = {
       cookie: jest.fn(),
@@ -54,7 +60,7 @@ describe('AuthController', () => {
     })
       .overrideGuard(SessionGuard)
       .useValue({ canActivate: () => true })
-      .overrideGuard(ThrottlerGuard)
+      .overrideGuard(LoginThrottlerGuard)
       .useValue({ canActivate: () => true })
       .compile();
     controller = module.get(AuthController);
@@ -77,7 +83,7 @@ describe('AuthController', () => {
     await controller.handleGoogleCallback(
       'code',
       'state-1',
-      createRequest('state-1'),
+      'state-1',
       mockRes as unknown as Response,
     );
     expect(mockAuth.loginWithGoogle).toHaveBeenCalledWith('code');
@@ -94,7 +100,7 @@ describe('AuthController', () => {
       controller.handleGoogleCallback(
         'code',
         'forged',
-        createRequest('state-1'),
+        'state-1',
         mockRes as unknown as Response,
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
@@ -106,19 +112,30 @@ describe('AuthController', () => {
       controller.handleGoogleCallback(
         'code',
         'state-1',
-        createRequest(undefined),
+        undefined,
         mockRes as unknown as Response,
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('POST /auth/setup sets credentials for the signed-in user', async () => {
+  it('POST /auth/setup sets credentials and replaces ngg.sid', async () => {
     const inputBody = { username: 'somchai_k', password: 'password123' };
     const actualBody = await controller.setupCredentials(
       { id: 1 } as never,
       inputBody,
+      'old-cookie',
+      mockRes as unknown as Response,
     );
-    expect(mockAuth.setupCredentials).toHaveBeenCalledWith(1, inputBody);
+    expect(mockAuth.setupCredentials).toHaveBeenCalledWith(
+      1,
+      inputBody,
+      'old-cookie',
+    );
+    expect(mockRes.cookie).toHaveBeenCalledWith(
+      'ngg.sid',
+      'cookie-id',
+      expect.objectContaining({ httpOnly: true, path: '/' }),
+    );
     expect(actualBody).toEqual(expectedUser);
   });
 
@@ -135,5 +152,35 @@ describe('AuthController', () => {
       expect.objectContaining({ httpOnly: true, path: '/' }),
     );
     expect(actualBody).toEqual(expectedUser);
+  });
+
+  it('GET /auth/me returns the signed-in user', async () => {
+    const inputUser = { id: 1 } as never;
+    const actualBody = await controller.getMe(inputUser);
+    expect(mockAuth.getMe).toHaveBeenCalledWith(inputUser);
+    expect(actualBody).toEqual(expectedUser);
+  });
+
+  it('PATCH /auth/username changes the username and leaves ngg.sid alone', async () => {
+    const inputUser = { id: 1 } as never;
+    const inputBody = { username: 'somchai_new' };
+    const actualBody = await controller.changeUsername(inputUser, inputBody);
+    expect(mockAuth.changeUsername).toHaveBeenCalledWith(inputUser, inputBody);
+    expect(actualBody).toEqual(expectedUser);
+    expect(mockRes.cookie).not.toHaveBeenCalled();
+    expect(mockRes.clearCookie).not.toHaveBeenCalled();
+  });
+
+  it('POST /auth/logout deletes the session and clears only ngg.sid', async () => {
+    await controller.logout('cookie-id', mockRes as unknown as Response);
+    expect(mockAuth.logout).toHaveBeenCalledWith('cookie-id');
+    expect(mockRes.clearCookie).toHaveBeenCalledWith(
+      'ngg.sid',
+      expect.objectContaining({ path: '/' }),
+    );
+    const actualClearedNames = mockRes.clearCookie.mock.calls.map(
+      (call: unknown[]) => call[0],
+    );
+    expect(actualClearedNames).toEqual(['ngg.sid']);
   });
 });

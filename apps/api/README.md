@@ -50,8 +50,13 @@ $ npm run start:prod
 # unit tests
 $ npm run test
 
-# e2e tests
-$ npm run test:e2e
+# e2e tests: starts Postgres + Redis with docker compose, migrates a separate
+# `nextgen_grader_e2e` database and uses Redis db 15, so dev data is never touched.
+# Each test starts from empty tables and an empty Redis db. Google is faked
+# (test/support/fake-google-oauth.service.ts) and the clock is movable
+# (test/support/fake-clock.service.ts). Override targets with
+# E2E_DATABASE_URL / E2E_REDIS_URL. Runs from apps/api or the repo root.
+$ bun run test:e2e
 
 # test coverage
 $ npm run test:cov

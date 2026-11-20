@@ -12,8 +12,21 @@ export const GOOGLE_AUTH_PATH = '/auth/google';
 /** Google scopes: an ID token with the user's email, name and picture. */
 export const GOOGLE_SCOPES = ['openid', 'email', 'profile'];
 
-/** Only university Google accounts may sign in. */
-export const ALLOWED_EMAIL_DOMAIN = 'email.kmutnb.ac.th';
+/**
+ * University Google accounts that may sign in: students, then staff.
+ * Match the part after `@` exactly (any letter case). A suffix check would
+ * also allow `notemail.kmutnb.ac.th`.
+ */
+export const ALLOWED_EMAIL_DOMAINS = [
+  'email.kmutnb.ac.th',
+  'kmutnb.ac.th',
+] as const;
+
+/**
+ * Google's consent screen accepts one `hd` hint. Students' domain only;
+ * both domains are enforced in AuthService, not by this hint.
+ */
+export const GOOGLE_HD_HINT = ALLOWED_EMAIL_DOMAINS[0];
 
 /** Options every auth cookie shares. HTTPS-only in production; plain HTTP on localhost. */
 export const BASE_COOKIE_OPTIONS: CookieOptions = {
@@ -31,9 +44,21 @@ export const USERNAME_PATTERN = /^[a-z0-9_]+$/;
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 72;
 
-/** POST /auth/login rate limit: this many tries per window, per IP and per username. */
-export const LOGIN_RATE_LIMIT = 5;
+/** How long after a Google sign-in a forgotten-password reset is allowed. */
+export const PASSWORD_RESET_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * POST /auth/login rate limits, each per one-minute window. Per username (any
+ * capitals share one counter) so one student's lockout doesn't block a lab that
+ * shares one IP address; per IP as a looser cap on guessing across usernames.
+ */
 export const LOGIN_RATE_TTL_MS = 60 * 1000;
+export const LOGIN_USERNAME_RATE_LIMIT = 5;
+export const LOGIN_IP_RATE_LIMIT = 100;
+
+/** Names of the two login throttlers registered with ThrottlerModule. */
+export const LOGIN_IP_THROTTLER = 'ip';
+export const LOGIN_USERNAME_THROTTLER = 'username';
 
 /**
  * bcrypt hash of a random throwaway password. Login verifies against it when the

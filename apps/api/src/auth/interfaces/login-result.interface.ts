@@ -1,6 +1,6 @@
 import type { UserDto } from '@/auth/dto/user.dto';
 
-/** Result of a successful password login: the new session and the signed-in user. */
+/** A new session cookie id and the user it belongs to. */
 export interface LoginResult {
   readonly cookieId: string;
   readonly user: UserDto;

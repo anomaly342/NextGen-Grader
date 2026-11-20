@@ -6,6 +6,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
 import { BcryptService } from '@/bcrypt/bcrypt.service';
+import { ClockService } from '@/clock/clock.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { SessionsService } from '@/sessions/sessions.service';
 import { DUMMY_PASSWORD_HASH } from './auth.constants';
@@ -38,6 +39,13 @@ describe('AuthService', () => {
     role: 'STUDENT',
     credentialsSetAt: inputUserRow.credentialsSetAt,
   };
+  const inputSessionUser = {
+    id: 1,
+    email: inputPayload.email,
+    name: inputPayload.name,
+    avatarUrl: inputPayload.picture,
+    role: 'STUDENT' as const,
+  };
   let service: AuthService;
   let mockGoogle: {
     generateAuthUrl: jest.Mock;
@@ -49,6 +57,8 @@ describe('AuthService', () => {
     jest.Mock
   >;
   let mockCreateSession: jest.Mock;
+  let mockDestroySession: jest.Mock;
+  let mockFindCurrentUserSession: jest.Mock;
   let mockBcrypt: { hash: jest.Mock; verify: jest.Mock };
 
   beforeEach(async () => {
@@ -71,6 +81,18 @@ describe('AuthService', () => {
       first: jest.fn().mockResolvedValue(inputUserRow),
     };
     mockCreateSession = jest.fn().mockResolvedValue('cookie-id');
+    mockDestroySession = jest.fn().mockResolvedValue(undefined);
+    mockFindCurrentUserSession = jest.fn().mockResolvedValue({
+      id: 1,
+      kind: 'USER',
+      startedBy: 'GOOGLE',
+      credentialsSetAt: null,
+      lastLoginAt: '2026-11-01T09:00:00.000Z',
+      email: inputPayload.email,
+      name: inputPayload.name,
+      avatarUrl: inputPayload.picture,
+      role: 'STUDENT',
+    });
     mockBcrypt = {
       hash: jest.fn().mockResolvedValue('$2b$12$hash'),
       verify: jest.fn().mockResolvedValue(true),
@@ -82,9 +104,14 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: { User: mockUser } },
         {
           provide: SessionsService,
-          useValue: { createSession: mockCreateSession },
+          useValue: {
+            createSession: mockCreateSession,
+            destroySession: mockDestroySession,
+            findCurrentUserSession: mockFindCurrentUserSession,
+          },
         },
         { provide: BcryptService, useValue: mockBcrypt },
+        ClockService,
       ],
     }).compile();
     service = module.get(AuthService);
@@ -131,12 +158,23 @@ describe('AuthService', () => {
       expect(mockUser.upsert).not.toHaveBeenCalled();
     });
 
+    it.each(['staff@kmutnb.ac.th', 'Staff@KMUTNB.AC.TH'])(
+      'accepts the staff domain %s',
+      async (inputEmail) => {
+        mockGoogle.verifyIdToken.mockResolvedValue({
+          getPayload: () => ({ ...inputPayload, email: inputEmail }),
+        });
+        await expect(service.loginWithGoogle('code')).resolves.toBe(
+          'cookie-id',
+        );
+      },
+    );
+
     it.each([
       'student@gmail.com',
-      'student@kmutnb.ac.th',
       'student@notemail.kmutnb.ac.th',
       'student@email.kmutnb.ac.th.evil.com',
-    ])('rejects %s (not @email.kmutnb.ac.th)', async (inputEmail) => {
+    ])('rejects %s (not a university domain)', async (inputEmail) => {
       mockGoogle.verifyIdToken.mockResolvedValue({
         getPayload: () => ({ ...inputPayload, email: inputEmail }),
       });
@@ -156,6 +194,36 @@ describe('AuthService', () => {
       await expect(service.loginWithGoogle('code')).resolves.toBe('cookie-id');
     });
 
+    it('opens a USER session started by Google', async () => {
+      await service.loginWithGoogle('code');
+      expect(mockCreateSession).toHaveBeenCalledWith({
+        kind: 'USER',
+        id: 1,
+        user: {
+          id: 1,
+          email: inputPayload.email,
+          name: inputPayload.name,
+          avatarUrl: inputPayload.picture,
+          role: 'STUDENT',
+        },
+        credentialsSetAt: inputUserRow.credentialsSetAt,
+        startedBy: 'GOOGLE',
+        lastLoginAt: expect.any(Date) as unknown,
+      });
+    });
+
+    it('records Credential setup as not done when credentialsSetAt is null', async () => {
+      mockUser.upsert.mockResolvedValue({
+        ...inputUserRow,
+        username: null,
+        credentialsSetAt: null,
+      });
+      await service.loginWithGoogle('code');
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ credentialsSetAt: null }),
+      );
+    });
+
     it('asks Google to prefer university accounts', () => {
       service.buildGoogleAuthUrl('state-1');
       expect(mockGoogle.generateAuthUrl).toHaveBeenCalledWith(
@@ -167,11 +235,19 @@ describe('AuthService', () => {
   describe('setupCredentials', () => {
     const inputBody = { username: 'somchai_k', password: 'password123' };
 
-    it('stores only the bcrypt hash and returns credentialsSetAt', async () => {
+    it('stores only the bcrypt hash and replaces the session with setup done', async () => {
       // select() drops passwordHash; the mock ignores select, so stub the row it would return.
       mockUser.update.mockResolvedValue(expectedUserDto);
-      const actualUser = await service.setupCredentials(1, inputBody);
-      expect(actualUser).toEqual(expectedUserDto);
+      const actualResult = await service.setupCredentials(
+        1,
+        inputBody,
+        'old-cookie',
+      );
+      expect(actualResult).toEqual({
+        cookieId: 'cookie-id',
+        user: expectedUserDto,
+      });
+      expect(mockFindCurrentUserSession).toHaveBeenCalledWith('old-cookie');
       expect(mockBcrypt.hash).toHaveBeenCalledWith('password123');
       expect(mockUser.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -180,20 +256,43 @@ describe('AuthService', () => {
           credentialsSetAt: expect.any(Date) as unknown,
         }),
       );
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'USER',
+          id: 1,
+          startedBy: 'GOOGLE',
+          credentialsSetAt: inputUserRow.credentialsSetAt,
+          lastLoginAt: new Date('2026-11-01T09:00:00.000Z'),
+        }),
+      );
       expect(JSON.stringify(mockUser.update.mock.calls)).not.toContain(
         'password123',
       );
     });
 
+    it('401 NOT_SIGNED_IN when that session is no longer current', async () => {
+      mockFindCurrentUserSession.mockResolvedValue(null);
+      const actualError = await service
+        .setupCredentials(1, inputBody, 'old-cookie')
+        .catch((error: unknown) => error);
+      expect(actualError).toBeInstanceOf(UnauthorizedException);
+      expect(
+        (actualError as UnauthorizedException).getResponse(),
+      ).toMatchObject({ code: 'NOT_SIGNED_IN' });
+      expect(mockUser.update).not.toHaveBeenCalled();
+      expect(mockCreateSession).not.toHaveBeenCalled();
+    });
+
     it('409 SETUP_ALREADY_DONE when credentials are already set', async () => {
       mockUser.update.mockResolvedValue(null);
       const actualError = await service
-        .setupCredentials(1, inputBody)
+        .setupCredentials(1, inputBody, 'old-cookie')
         .catch((error: unknown) => error);
       expect(actualError).toBeInstanceOf(ConflictException);
       expect((actualError as ConflictException).getResponse()).toMatchObject({
         code: 'SETUP_ALREADY_DONE',
       });
+      expect(mockCreateSession).not.toHaveBeenCalled();
     });
 
     it('409 USERNAME_TAKEN on a unique violation of User.username', async () => {
@@ -202,33 +301,44 @@ describe('AuthService', () => {
         constraint: 'User_username_key',
       });
       const actualError = await service
-        .setupCredentials(1, inputBody)
+        .setupCredentials(1, inputBody, 'old-cookie')
         .catch((error: unknown) => error);
       expect(actualError).toBeInstanceOf(ConflictException);
       expect((actualError as ConflictException).getResponse()).toMatchObject({
         code: 'USERNAME_TAKEN',
       });
+      expect(mockCreateSession).not.toHaveBeenCalled();
     });
 
     it('rethrows unrelated database errors', async () => {
       const inputError = new Error('connection lost');
       mockUser.update.mockRejectedValue(inputError);
-      await expect(service.setupCredentials(1, inputBody)).rejects.toBe(
-        inputError,
-      );
+      await expect(
+        service.setupCredentials(1, inputBody, 'old-cookie'),
+      ).rejects.toBe(inputError);
+      expect(mockCreateSession).not.toHaveBeenCalled();
     });
   });
 
   describe('loginWithPassword', () => {
     const inputBody = { username: 'Somchai_K', password: 'password123' };
 
-    it('signs in, lowercases the username and returns the user', async () => {
+    it('signs in, looks up the username exactly as typed and returns the user', async () => {
       const actualResult = await service.loginWithPassword(inputBody);
       expect(actualResult).toEqual({
         cookieId: 'cookie-id',
         user: expectedUserDto,
       });
-      expect(mockUser.where).toHaveBeenCalledWith({ username: 'somchai_k' });
+      expect(mockUser.where).toHaveBeenCalledWith({ username: 'Somchai_K' });
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'USER',
+          id: 1,
+          startedBy: 'PASSWORD',
+          lastLoginAt: null,
+          credentialsSetAt: inputUserRow.credentialsSetAt,
+        }),
+      );
     });
 
     it('401 INVALID_CREDENTIALS for a wrong password', async () => {
@@ -261,6 +371,88 @@ describe('AuthService', () => {
         UnauthorizedException,
       );
       expect(mockCreateSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getMe', () => {
+    it('returns the session Role and the username from the database', async () => {
+      mockUser.first.mockResolvedValue({
+        username: 'somchai_k',
+        credentialsSetAt: inputUserRow.credentialsSetAt,
+      });
+      const actualUser = await service.getMe(inputSessionUser);
+      expect(actualUser).toEqual(expectedUserDto);
+    });
+
+    it('401 NOT_SIGNED_IN when the User row is gone', async () => {
+      mockUser.first.mockResolvedValue(null);
+      const actualError = await service
+        .getMe(inputSessionUser)
+        .catch((error: unknown) => error);
+      expect(actualError).toBeInstanceOf(UnauthorizedException);
+      expect(
+        (actualError as UnauthorizedException).getResponse(),
+      ).toMatchObject({ code: 'NOT_SIGNED_IN' });
+    });
+  });
+
+  describe('changeUsername', () => {
+    it('stores the new username and returns the User without touching the session', async () => {
+      mockUser.update.mockResolvedValue({
+        username: 'somchai_new',
+        credentialsSetAt: inputUserRow.credentialsSetAt,
+      });
+      const actualUser = await service.changeUsername(inputSessionUser, {
+        username: 'somchai_new',
+      });
+      expect(actualUser).toEqual({
+        ...expectedUserDto,
+        username: 'somchai_new',
+      });
+      expect(mockUser.where).toHaveBeenCalledWith({ id: 1 });
+      expect(mockUser.update).toHaveBeenCalledWith({ username: 'somchai_new' });
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockDestroySession).not.toHaveBeenCalled();
+    });
+
+    it('409 USERNAME_TAKEN on a unique violation of User.username', async () => {
+      mockUser.update.mockRejectedValue({
+        sqlState: '23505',
+        constraint: 'User_username_key',
+      });
+      const actualError = await service
+        .changeUsername(inputSessionUser, { username: 'other_one' })
+        .catch((error: unknown) => error);
+      expect(actualError).toBeInstanceOf(ConflictException);
+      expect((actualError as ConflictException).getResponse()).toMatchObject({
+        code: 'USERNAME_TAKEN',
+      });
+    });
+
+    it('rethrows unrelated database errors', async () => {
+      const inputError = new Error('connection lost');
+      mockUser.update.mockRejectedValue(inputError);
+      await expect(
+        service.changeUsername(inputSessionUser, { username: 'somchai_new' }),
+      ).rejects.toBe(inputError);
+    });
+
+    it('401 NOT_SIGNED_IN when the User row is gone', async () => {
+      mockUser.update.mockResolvedValue(null);
+      const actualError = await service
+        .changeUsername(inputSessionUser, { username: 'somchai_new' })
+        .catch((error: unknown) => error);
+      expect(actualError).toBeInstanceOf(UnauthorizedException);
+      expect(
+        (actualError as UnauthorizedException).getResponse(),
+      ).toMatchObject({ code: 'NOT_SIGNED_IN' });
+    });
+  });
+
+  describe('logout', () => {
+    it('deletes the session', async () => {
+      await service.logout('cookie-id');
+      expect(mockDestroySession).toHaveBeenCalledWith('cookie-id');
     });
   });
 });
