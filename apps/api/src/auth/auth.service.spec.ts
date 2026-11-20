@@ -158,12 +158,23 @@ describe('AuthService', () => {
       expect(mockUser.upsert).not.toHaveBeenCalled();
     });
 
+    it.each(['staff@kmutnb.ac.th', 'Staff@KMUTNB.AC.TH'])(
+      'accepts the staff domain %s',
+      async (inputEmail) => {
+        mockGoogle.verifyIdToken.mockResolvedValue({
+          getPayload: () => ({ ...inputPayload, email: inputEmail }),
+        });
+        await expect(service.loginWithGoogle('code')).resolves.toBe(
+          'cookie-id',
+        );
+      },
+    );
+
     it.each([
       'student@gmail.com',
-      'student@kmutnb.ac.th',
       'student@notemail.kmutnb.ac.th',
       'student@email.kmutnb.ac.th.evil.com',
-    ])('rejects %s (not @email.kmutnb.ac.th)', async (inputEmail) => {
+    ])('rejects %s (not a university domain)', async (inputEmail) => {
       mockGoogle.verifyIdToken.mockResolvedValue({
         getPayload: () => ({ ...inputPayload, email: inputEmail }),
       });

@@ -13,7 +13,8 @@ import { SessionRecord } from '@/sessions/interfaces/session-record.interface';
 import { SessionUser } from '@/sessions/interfaces/session-user.interface';
 import { SessionsService } from '@/sessions/sessions.service';
 import {
-  ALLOWED_EMAIL_DOMAIN,
+  ALLOWED_EMAIL_DOMAINS,
+  GOOGLE_HD_HINT,
   DUMMY_PASSWORD_HASH,
   GOOGLE_SCOPES,
   PASSWORD_RESET_WINDOW_MS,
@@ -47,8 +48,8 @@ export class AuthService {
       scope: GOOGLE_SCOPES,
       state,
       prompt: 'select_account',
-      // Hint: Google pre-selects university accounts. Enforced in fetchGoogleProfile.
-      hd: ALLOWED_EMAIL_DOMAIN,
+      // One hint only. Both domains are enforced in fetchGoogleProfile.
+      hd: GOOGLE_HD_HINT,
     });
   }
 
@@ -324,7 +325,7 @@ export class AuthService {
     }
     if (!this.isAllowedEmail(payload.email)) {
       throw new ForbiddenException(
-        `Sign in with your @${ALLOWED_EMAIL_DOMAIN} account`,
+        `Sign in with your @${ALLOWED_EMAIL_DOMAINS.join(' or @')} account`,
       );
     }
     return {
@@ -369,9 +370,13 @@ export class AuthService {
     });
   }
 
-  /** True if `email` belongs to the allowed university domain (case-insensitive). */
+  /** True if `email`'s domain is an allowed university domain (case-insensitive). */
   private isAllowedEmail(email: string): boolean {
-    return email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`);
+    const domain = email.toLowerCase().split('@').at(-1);
+    return (
+      domain !== undefined &&
+      ALLOWED_EMAIL_DOMAINS.some((allowed) => allowed === domain)
+    );
   }
 
   /** True if `error` is Postgres refusing a duplicate `User.username`. */

@@ -121,7 +121,8 @@ export class AuthController {
   })
   @ApiResponse({
     status: 403,
-    description: 'The Google account is not an @email.kmutnb.ac.th account.',
+    description:
+      'The Google account is not an @email.kmutnb.ac.th or @kmutnb.ac.th account.',
   })
   async handleGoogleCallback(
     @Query('code') code: string | undefined,

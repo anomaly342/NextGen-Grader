@@ -12,8 +12,21 @@ export const GOOGLE_AUTH_PATH = '/auth/google';
 /** Google scopes: an ID token with the user's email, name and picture. */
 export const GOOGLE_SCOPES = ['openid', 'email', 'profile'];
 
-/** Only university Google accounts may sign in. */
-export const ALLOWED_EMAIL_DOMAIN = 'email.kmutnb.ac.th';
+/**
+ * University Google accounts that may sign in: students, then staff.
+ * Match the part after `@` exactly (any letter case). A suffix check would
+ * also allow `notemail.kmutnb.ac.th`.
+ */
+export const ALLOWED_EMAIL_DOMAINS = [
+  'email.kmutnb.ac.th',
+  'kmutnb.ac.th',
+] as const;
+
+/**
+ * Google's consent screen accepts one `hd` hint. Students' domain only;
+ * both domains are enforced in AuthService, not by this hint.
+ */
+export const GOOGLE_HD_HINT = ALLOWED_EMAIL_DOMAINS[0];
 
 /** Options every auth cookie shares. HTTPS-only in production; plain HTTP on localhost. */
 export const BASE_COOKIE_OPTIONS: CookieOptions = {

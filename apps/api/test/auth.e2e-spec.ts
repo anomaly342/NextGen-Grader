@@ -160,6 +160,25 @@ describe('Auth (e2e)', () => {
       expect(findSessionCookie(actualResponse)).toBeUndefined();
     });
 
+    it('signs in a verified @kmutnb.ac.th account as a Student', async () => {
+      const device = createDevice();
+      const actualResponse = await signInWithGoogle(device, {
+        email: 'Staff@KMUTNB.AC.TH',
+        name: 'Staff Person',
+      });
+      expect(actualResponse.status).toBe(302);
+      expect(findSessionCookie(actualResponse)).toMatch(/HttpOnly/);
+      const { body: actualUser } = (await setupCredentials(
+        device,
+        'staff_k',
+      ).expect(200)) as { body: unknown };
+      expect(actualUser).toMatchObject({
+        email: 'Staff@KMUTNB.AC.TH',
+        name: 'Staff Person',
+        role: 'STUDENT',
+      });
+    });
+
     it.each(['outsider@gmail.com', 'student@email.kmutnb.ac.th.evil.com'])(
       'rejects the non-university email %s',
       async (inputEmail) => {
