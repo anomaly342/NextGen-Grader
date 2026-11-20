@@ -72,9 +72,7 @@ function resolveImport(fromPath, spec) {
 /** Problems in one file's text. */
 function findTextProblems(path, text) {
   const problems = [];
-  for (const match of text.matchAll(
-    /constructor\s*\(([\s\S]*?)\)\s*\{/g,
-  )) {
+  for (const match of text.matchAll(/constructor\s*\(([\s\S]*?)\)\s*\{/g)) {
     for (const param of match[1].matchAll(
       /(\w+)\s*:\s*(Redis|PrismaService|JwtService)\b/g,
     )) {
@@ -108,6 +106,18 @@ function findTextProblems(path, text) {
       if (/^(export )?interface /.test(line)) {
         problems.push(`${path}: a top-level interface belongs in interfaces/`);
       }
+    }
+  }
+  if (path.startsWith('src/') && /from ['"]\.\.\//.test(text)) {
+    problems.push(`${path}: import across modules with @/, not ../`);
+  }
+  const isSpec = /\.(e2e-)?spec\.ts$/.test(path);
+  if (!isSpec && !path.endsWith('.constants.ts')) {
+    const exportCount = text.match(/^export /gm)?.length ?? 0;
+    if (exportCount > 1) {
+      problems.push(
+        `${path}: one export per file (only .constants.ts may export several)`,
+      );
     }
   }
   return problems;

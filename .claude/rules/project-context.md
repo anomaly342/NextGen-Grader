@@ -14,6 +14,8 @@ problem drafting.
 - The CMS Worker (compile/run sandbox using isolate) runs in a separate Linux VM, not in this repo's Docker setup
 - Ollama runs Gemma 4 31B locally. Redis holds BullMQ queues and sessions. PostgreSQL holds everything else,
   including file bytes (`fsobjects`, addressed by SHA-1)
+- Deployment (proxy chain, API instance count): `docs/ops/deployment.md`. Read it before touching anything
+  keyed by client IP or held in process memory (rate limits, caches)
 
 ## Hard constraints
 
@@ -66,8 +68,3 @@ problem drafting.
   keep the unfiltered text in `rawContent` when the filter changed something.
 - Exam chat: per-exam limits (`chatMaxMessages`, `chatFreeMessages`, `chatPenalty`, token limits, optional
   `chatSystemPrompt`). Over-long inputs are rejected without counting.
-
-## Where the full spec lives
-
-The route-by-route requirements doc (frontend pages, REST routes, socket events, queues) is the source of
-truth for endpoints. If a change contradicts it, point that out instead of silently diverging.
