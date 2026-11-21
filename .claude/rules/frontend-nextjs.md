@@ -19,7 +19,8 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
   - Teacher: `/teach`, `/teach/classrooms/...`, `/admin/users`
 - `apps/exam` is the exam site. One deployment serves each Classroom-year host (`data2026.grader.com`).
   Pages: `/login`, `/problems/[problemId]`. No Classroom or Teacher routes.
-- Middleware on `apps/web`: no session → `/login`; credential setup unfinished → `/setup`.
+- Middleware on `apps/web` calls `GET /auth/me` via the server-only client: no session or 401 → `/login?next=<path>`;
+  credential setup unfinished → `/setup`; a finished User on `/login` or `/setup` → `/`.
   It does not handle an Examinee. Hide the Practice tab when the Classroom is all-mandatory.
 - The exam-room network does not route to the Classroom host. That filter is outside this repo.
 
@@ -30,7 +31,12 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 - `packages/lib` holds pure helpers, the API client, and the socket. Clients use relative URLs.
   They do not know the Nest host. Each app's `next.config` rewrites `/api` to Nest `/api/v1` and proxies the socket.
   No `app/api` proxy route handlers. The apps do not import each other.
-- All server state goes through TanStack Query via that client. No `fetch` in components.
+- Middleware and server components use the server-only client in `packages/lib`. It reads `API_INTERNAL_URL` and forwards
+  the request's cookies. Server components fetch and pass props; after a mutation, call `router.refresh()`.
+- In client components, server state goes through TanStack Query via the browser client. No `fetch` in components.
+- The browser client handles auth errors in one place: 401 `NOT_SIGNED_IN` → `/login?next=<current>`,
+  403 `CREDENTIAL_SETUP_REQUIRED` → `/setup`.
+- Username and password rules come from `packages/lib`, shared with the API. The API has the final say.
 - Query keys are arrays starting with the resource: `['classroom', id]`, `['submissions', { problemId }]`.
 - Socket events update or invalidate queries in the shared client. Components do not subscribe to sockets directly.
 - Switch on the backend's error `code`, not on message text. Keep a map from code to user-facing text.

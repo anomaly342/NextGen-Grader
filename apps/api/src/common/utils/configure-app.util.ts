@@ -1,12 +1,17 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 
+/** Nest's route prefix. The web host's `/api` rewrite points here. */
+const API_PREFIX = 'api/v1';
+
 /**
- * Request handling shared by main.ts and the e2e tests: CORS, cookies and
- * body validation. Keeps the tested app identical to the real one.
+ * Request handling shared by main.ts and the e2e tests: route prefix, CORS,
+ * cookies and body validation. Keeps the tested app identical to the real one.
  */
 export function configureApp(app: INestApplication): void {
-  // Only the web app may call the API, with cookies (the `ngg.sid` session cookie).
+  // Browsers reach Nest only through the web host's `/api` rewrite to this prefix (ADR 0002).
+  app.setGlobalPrefix(API_PREFIX);
+  // The web app goes through the rewrite (same origin). CORS is left for local dev tools.
   app.enableCors({
     origin: process.env['WEB_URL'],
     credentials: true,

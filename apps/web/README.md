@@ -20,6 +20,12 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment
+
+| Variable           | Example (local)         | Notes                                                                                                                                                                     |
+| ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_INTERNAL_URL` | `http://localhost:4000` | Where the Next server reaches Nest. `next.config.ts` rewrites `/api/*` to `<API_INTERNAL_URL>/api/v1/*` (a rewrite, never a redirect). The browser only ever uses `/api`. |
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

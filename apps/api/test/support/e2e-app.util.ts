@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { createServer, type RequestListener, type Server } from 'node:http';
 import { getStorageToken } from '@nestjs/throttler';
 import { Test } from '@nestjs/testing';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
@@ -27,6 +28,22 @@ async function truncateTables(postgresClient: PostgresClient): Promise<void> {
 }
 
 /**
+ * Stands in for the web host: forwards every request to Nest, turning `/api/...`
+ * into `/api/v1/...` like the `next.config.ts` rewrite (a rewrite, not a
+ * redirect). The browser only ever sees the web host's paths, so cookie paths
+ * are checked the way a real browser checks them.
+ */
+function createWebHost(app: INestApplication<App>): Server {
+  const nestHandler = app.getHttpAdapter().getInstance() as RequestListener;
+  return createServer((req, res) => {
+    if (req.url?.startsWith('/api/')) {
+      req.url = `/api/v1/${req.url.slice('/api/'.length)}`;
+    }
+    nestHandler(req, res);
+  });
+}
+
+/**
  * Boots the real AppModule against the e2e Postgres and Redis. Only Google,
  * the clock and the rate-limit storage are swapped for test doubles.
  */
@@ -52,6 +69,7 @@ export async function createE2eApp(): Promise<E2eApp> {
   await postgresClient.connect();
   return {
     app,
+    webHost: createWebHost(app),
     google,
     clock,
     resetState: async (): Promise<void> => {

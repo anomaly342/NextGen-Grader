@@ -31,6 +31,10 @@ _Avoid_: Registration, onboarding, sign-up
 A User's username and password, usable as an alternative to signing in with their University account. The username is a sign-in handle only; it is never how a User is shown to others.
 _Avoid_: Login, handle
 
+**Password reset**:
+Choosing a new password without the current one. Allowed only shortly after signing in with the University account, which is how a User proves who they are when they have forgotten their password.
+_Avoid_: Forgot password, password recovery
+
 **Display name**:
 A User's real name, as given by their University account; how they are shown to Teachers and everyone else. Not editable in the app.
 _Avoid_: Username, nickname

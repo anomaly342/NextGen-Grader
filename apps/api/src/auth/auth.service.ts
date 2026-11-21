@@ -325,12 +325,16 @@ export class AuthService {
     });
     const payload = ticket.getPayload();
     if (!payload?.email || !payload.email_verified) {
-      throw new UnauthorizedException('Google account has no verified email');
+      throw new UnauthorizedException({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Google account has no verified email',
+      });
     }
     if (!this.isAllowedEmail(payload.email)) {
-      throw new ForbiddenException(
-        `Sign in with your @${ALLOWED_EMAIL_DOMAINS.join(' or @')} account`,
-      );
+      throw new ForbiddenException({
+        code: 'DOMAIN_NOT_ALLOWED',
+        message: `Sign in with your @${ALLOWED_EMAIL_DOMAINS.join(' or @')} account`,
+      });
     }
     return {
       googleId: payload.sub,
@@ -348,7 +352,10 @@ export class AuthService {
     } catch {
       // Expired, reused or forged code: same answer as a missing token.
     }
-    throw new UnauthorizedException('Invalid Google authorization code');
+    throw new UnauthorizedException({
+      code: 'LOGIN_EXPIRED',
+      message: 'Invalid Google authorization code',
+    });
   }
 
   /** Creates the user on first login, otherwise refreshes their profile and last login. */

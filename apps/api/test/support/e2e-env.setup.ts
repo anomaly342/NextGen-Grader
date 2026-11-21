@@ -15,4 +15,4 @@ process.env['WEB_URL'] = E2E_WEB_URL;
 process.env['JWT_SECRET'] = 'e2e-jwt-secret';
 process.env['GOOGLE_CLIENT_ID'] = 'e2e-google-client-id';
 process.env['GOOGLE_CLIENT_SECRET'] = 'e2e-google-client-secret';
-process.env['GOOGLE_CALLBACK_URL'] = 'http://api.test/auth/google/callback';
+process.env['GOOGLE_CALLBACK_URL'] = 'http://web.test/api/auth/google/callback';

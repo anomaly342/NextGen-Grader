@@ -6,8 +6,34 @@ export const OAUTH_STATE_COOKIE_NAME = 'oauth_state';
 /** How long a login attempt may take, in milliseconds (10 minutes). */
 export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-/** Path both Google routes live under, so the state cookie is only sent there. */
-export const GOOGLE_AUTH_PATH = '/auth/google';
+/**
+ * Browser-visible path both Google routes live under, so the state cookie is
+ * only sent there. The browser sees the web host's `/api` rewrite, not Nest's
+ * internal `/api/v1` prefix, so the cookie path uses `/api`.
+ */
+export const GOOGLE_AUTH_COOKIE_PATH = '/api/auth/google';
+
+/**
+ * Google sign-in failures the callback sends back to `/login?error=<code>`
+ * instead of answering with JSON: the browser is mid-redirect, not a fetch.
+ * LOGIN_EXPIRED covers a missing, mismatched or expired state or code.
+ */
+export const GOOGLE_CALLBACK_ERROR_CODES = [
+  'LOGIN_EXPIRED',
+  'EMAIL_NOT_VERIFIED',
+  'DOMAIN_NOT_ALLOWED',
+] as const;
+
+/** Longest `next` path kept by GET /auth/google; longer ones are dropped. */
+export const NEXT_PATH_MAX_LENGTH = 2048;
+
+/**
+ * A same-site relative path: exactly one leading `/` (so no scheme and no
+ * `//host`), then no backslash or control character. Browsers read `\` as `/`
+ * and drop tabs and newlines, which would turn `/\evil.com` into `//evil.com`.
+ */
+// eslint-disable-next-line no-control-regex -- control characters are exactly what it rejects
+export const SAME_SITE_PATH_PATTERN = /^\/(?![/\\])[^\\\u0000-\u001f\u007f]*$/;
 
 /** Google scopes: an ID token with the user's email, name and picture. */
 export const GOOGLE_SCOPES = ['openid', 'email', 'profile'];

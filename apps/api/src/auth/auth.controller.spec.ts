@@ -1,4 +1,3 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LoginThrottlerGuard } from '@/common/guards/login-throttler.guard';
 import type { Response } from 'express';
@@ -7,6 +6,7 @@ import { SESSION_COOKIE_NAME } from '@/sessions/sessions.constants';
 import { OAUTH_STATE_COOKIE_NAME } from './auth.constants';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import type { OAuthState } from './interfaces/oauth-state.interface';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -25,6 +25,10 @@ describe('AuthController', () => {
     username: 'somchai_k',
     credentialsSetAt: new Date(),
   };
+  const inputOAuthState = JSON.stringify({
+    state: 'state-1',
+    next: '/problems/1',
+  });
   let mockRes: {
     cookie: jest.Mock;
     clearCookie: jest.Mock;
@@ -32,7 +36,6 @@ describe('AuthController', () => {
   };
 
   beforeEach(async () => {
-    process.env['WEB_URL'] = 'http://localhost:3000';
     mockAuth = {
       buildGoogleAuthUrl: jest.fn(
         (state: string) => `https://google/?state=${state}`,
@@ -68,22 +71,25 @@ describe('AuthController', () => {
 
   it('GET /auth/google stores a state cookie and returns the Google URL with it', () => {
     const actualBody = controller.getGoogleAuthUrl(
+      '/problems/1',
       mockRes as unknown as Response,
     );
-    const [cookieName, actualState] = mockRes.cookie.mock.calls[0] as [
-      string,
-      string,
-    ];
-    expect(cookieName).toBe(OAUTH_STATE_COOKIE_NAME);
-    expect(actualBody).toEqual({ url: `https://google/?state=${actualState}` });
+    const [actualCookieName, actualCookieValue] = mockRes.cookie.mock
+      .calls[0] as [string, string];
+    const actualOAuthState = JSON.parse(actualCookieValue) as OAuthState;
+    expect(actualCookieName).toBe(OAUTH_STATE_COOKIE_NAME);
+    expect(actualOAuthState.next).toBe('/problems/1');
+    expect(actualBody).toEqual({
+      url: `https://google/?state=${actualOAuthState.state}`,
+    });
     expect(mockRes.redirect).not.toHaveBeenCalled();
   });
 
-  it('callback signs in, sets the session cookie and redirects to the web app', async () => {
+  it('callback signs in, sets the session cookie and redirects to next', async () => {
     await controller.handleGoogleCallback(
       'code',
       'state-1',
-      'state-1',
+      inputOAuthState,
       mockRes as unknown as Response,
     );
     expect(mockAuth.loginWithGoogle).toHaveBeenCalledWith('code');
@@ -92,30 +98,29 @@ describe('AuthController', () => {
       'cookie-id',
       expect.objectContaining({ httpOnly: true }),
     );
-    expect(mockRes.redirect).toHaveBeenCalledWith('http://localhost:3000');
+    expect(mockRes.redirect).toHaveBeenCalledWith('/problems/1');
   });
 
-  it('callback rejects a state that does not match the cookie', async () => {
-    await expect(
-      controller.handleGoogleCallback(
-        'code',
-        'forged',
-        'state-1',
-        mockRes as unknown as Response,
-      ),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+  it('callback sends a state that does not match the cookie to /login?error=LOGIN_EXPIRED', async () => {
+    await controller.handleGoogleCallback(
+      'code',
+      'forged',
+      inputOAuthState,
+      mockRes as unknown as Response,
+    );
     expect(mockAuth.loginWithGoogle).not.toHaveBeenCalled();
+    expect(mockRes.redirect).toHaveBeenCalledWith('/login?error=LOGIN_EXPIRED');
   });
 
-  it('callback rejects when the state cookie is missing', async () => {
-    await expect(
-      controller.handleGoogleCallback(
-        'code',
-        'state-1',
-        undefined,
-        mockRes as unknown as Response,
-      ),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+  it('callback sends a missing state cookie to /login?error=LOGIN_EXPIRED', async () => {
+    await controller.handleGoogleCallback(
+      'code',
+      'state-1',
+      undefined,
+      mockRes as unknown as Response,
+    );
+    expect(mockAuth.loginWithGoogle).not.toHaveBeenCalled();
+    expect(mockRes.redirect).toHaveBeenCalledWith('/login?error=LOGIN_EXPIRED');
   });
 
   it('POST /auth/setup sets credentials and replaces ngg.sid', async () => {
