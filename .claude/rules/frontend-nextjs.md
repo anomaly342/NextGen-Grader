@@ -32,17 +32,41 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
   They do not know the Nest host. Each app's `next.config` rewrites `/api` to Nest `/api/v1` and proxies the socket.
   No `app/api` proxy route handlers. The apps do not import each other.
 - Middleware and server components use the app's server-only client (`apps/web/lib/server-client.ts`). It reads `API_INTERNAL_URL` and forwards
-  the request's cookies. Server components fetch and pass props; after a mutation, call `router.refresh()`.
+  the request's cookies. Server components fetch and pass props.
 - In client components, server state goes through TanStack Query via the browser client. No `fetch` in components.
+- Each piece of server data has one owner: a server component or a query, never both on one page.
+  After a mutation, refresh the owner: `router.refresh()` for server-component data, `invalidateQueries` for query data.
 - The browser client handles auth errors in one place: 401 `NOT_SIGNED_IN` → `/login?next=<current>`,
   403 `CREDENTIAL_SETUP_REQUIRED` → `/setup`.
 - Username and password rules come from `packages/lib`, shared with the API. The API has the final say.
 - Query keys are arrays starting with the resource: `['classroom', id]`, `['submissions', { problemId }]`.
-- Socket events update or invalidate queries in the shared client. Components do not subscribe to sockets directly.
+- Socket events land in the Query cache: `setQueryData` when the event carries the full data, `invalidateQueries`
+  when it only says something changed. One subscription hook per resource (`useSubmissionEvents(submissionId)`) lives
+  in `packages/lib` beside the socket; on reconnect it invalidates its resource's queries to catch missed events.
+  Components read from Query only.
 - Switch on the backend's error `code`, not on message text. Keep a map from code to user-facing text.
 - Show times in Asia/Bangkok; send and receive ISO UTC.
 - Never compute anything that decides access, deadlines or scores on the client; show what the API returns.
   Deadline countdowns are display only.
+
+## State
+
+- Put state in the URL when a link or the back button should restore it (tab, filters, page, chosen Section).
+  URL state uses `nuqs`; add the package with the first page that needs it.
+- Everything else is local `useState` / `useReducer`. No global store.
+
+## Forms
+
+- Every form uses TanStack Form (`@tanstack/react-form`) with shadcn fields from `packages/ui`.
+- Field validators call the plain rule functions in `packages/lib` (`checkUsername` → `UsernameIssue`) and map the
+  issue code to text. The same functions back the API DTOs.
+- Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) shows under
+  that field; anything else shows above the form via `getErrorMessage(code)`.
+
+## Loading and errors
+
+- Each route segment has `loading.tsx` and `error.tsx`.
+- Form errors show inline in the form. Mutation errors outside a form show as a toast (shadcn `sonner`).
 
 ## Uploads
 
@@ -63,5 +87,9 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 
 ## Components
 
-- Pages are server components that render client components for interactive parts.
+- Pages are server components that render client components for interactive parts. Put `'use client'` on the
+  smallest interactive piece.
+- Named exports. Kebab-case file and directory names (`auth-wizard/login-form.tsx`).
+- String-literal unions instead of TS `enum` (`type UsernameIssue = 'TOO_SHORT' | ...`).
+- Tailwind is mobile-first: base classes for 390px, `md:` / `lg:` for wider.
 - Keep domain display logic (score text for each grading mode, level badges) in `packages/lib` with unit tests.
