@@ -24,17 +24,6 @@ export const GOOGLE_CALLBACK_ERROR_CODES = [
   'DOMAIN_NOT_ALLOWED',
 ] as const;
 
-/** Longest `next` path kept by GET /auth/google; longer ones are dropped. */
-export const NEXT_PATH_MAX_LENGTH = 2048;
-
-/**
- * A same-site relative path: exactly one leading `/` (so no scheme and no
- * `//host`), then no backslash or control character. Browsers read `\` as `/`
- * and drop tabs and newlines, which would turn `/\evil.com` into `//evil.com`.
- */
-// eslint-disable-next-line no-control-regex -- control characters are exactly what it rejects
-export const SAME_SITE_PATH_PATTERN = /^\/(?![/\\])[^\\\u0000-\u001f\u007f]*$/;
-
 /** Google scopes: an ID token with the user's email, name and picture. */
 export const GOOGLE_SCOPES = ['openid', 'email', 'profile'];
 
@@ -60,15 +49,6 @@ export const BASE_COOKIE_OPTIONS: CookieOptions = {
   sameSite: 'lax',
   secure: process.env['NODE_ENV'] === 'production',
 };
-
-/** Username rules for POST /auth/setup: 4–20 chars, lowercase letters, digits, underscore. */
-export const USERNAME_MIN_LENGTH = 4;
-export const USERNAME_MAX_LENGTH = 20;
-export const USERNAME_PATTERN = /^[a-z0-9_]+$/;
-
-/** Password length. bcrypt ignores everything past 72 bytes, so longer is refused. */
-export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_MAX_LENGTH = 72;
 
 /** How long after a Google sign-in a forgotten-password reset is allowed. */
 export const PASSWORD_RESET_WINDOW_MS = 10 * 60 * 1000;

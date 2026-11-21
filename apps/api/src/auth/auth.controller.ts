@@ -34,11 +34,13 @@ import {
   BASE_COOKIE_OPTIONS,
   GOOGLE_AUTH_COOKIE_PATH,
   GOOGLE_CALLBACK_ERROR_CODES,
-  NEXT_PATH_MAX_LENGTH,
   OAUTH_STATE_COOKIE_NAME,
   OAUTH_STATE_TTL_MS,
-  SAME_SITE_PATH_PATTERN,
 } from './auth.constants';
+import {
+  NEXT_PATH_MAX_LENGTH,
+  getSameSitePath,
+} from '@repo/lib/auth/next-path';
 import { USER_RESPONSE_SCHEMA } from '@/common/swagger/swagger.constants';
 import { errorSchema } from '@/common/swagger/swagger.util';
 import { AuthService } from './auth.service';
@@ -103,7 +105,7 @@ export class AuthController {
   ): GoogleAuthUrl {
     const oauthState: OAuthState = {
       state: randomUUID(),
-      next: this.toSameSitePath(next),
+      next: getSameSitePath(next),
     };
     res.cookie(OAUTH_STATE_COOKIE_NAME, JSON.stringify(oauthState), {
       ...BASE_COOKIE_OPTIONS,
@@ -404,14 +406,6 @@ export class AuthController {
     this.clearSessionCookie(res);
   }
 
-  /** `next` if it is a same-site relative path (see SAME_SITE_PATH_PATTERN), otherwise null. */
-  private toSameSitePath(next: unknown): string | null {
-    if (typeof next !== 'string' || next.length > NEXT_PATH_MAX_LENGTH) {
-      return null;
-    }
-    return SAME_SITE_PATH_PATTERN.test(next) ? next : null;
-  }
-
   /** Sends the browser back to the web host's /login page with `errorCode`. */
   private redirectToLoginError(
     res: Response,
@@ -437,7 +431,7 @@ export class AuthController {
     try {
       const parsed = JSON.parse(raw) as Partial<OAuthState> | null;
       if (typeof parsed?.state !== 'string') return null;
-      return { state: parsed.state, next: this.toSameSitePath(parsed.next) };
+      return { state: parsed.state, next: getSameSitePath(parsed.next) };
     } catch {
       return null;
     }

@@ -31,7 +31,7 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 - `packages/lib` holds pure helpers, the API client, and the socket. Clients use relative URLs.
   They do not know the Nest host. Each app's `next.config` rewrites `/api` to Nest `/api/v1` and proxies the socket.
   No `app/api` proxy route handlers. The apps do not import each other.
-- Middleware and server components use the server-only client in `packages/lib`. It reads `API_INTERNAL_URL` and forwards
+- Middleware and server components use the app's server-only client (`apps/web/lib/server-client.ts`). It reads `API_INTERNAL_URL` and forwards
   the request's cookies. Server components fetch and pass props; after a mutation, call `router.refresh()`.
 - In client components, server state goes through TanStack Query via the browser client. No `fetch` in components.
 - The browser client handles auth errors in one place: 401 `NOT_SIGNED_IN` → `/login?next=<current>`,

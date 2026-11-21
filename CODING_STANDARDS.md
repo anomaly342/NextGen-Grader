@@ -3,13 +3,19 @@
 Read at review time. Every rule here is a judgement call. Layout and naming rules that can be checked by a
 machine live in `.claude/rules/` and the linters, so they're not repeated here.
 
-## apps/api (TypeScript, NestJS)
+## All TypeScript (apps/api, apps/web, packages/*)
+
+### Scope
+
+- Every new export has a caller in the same change, unless the ticket's acceptance criteria name it.
+  Clients, wrappers and endpoint maps arrive with their first caller.
 
 ### Types and data
 
 - Every function declares its parameter and return types; a shape used twice gets a named type.
-- Wrap a primitive that stands for a domain concept in its own type, and validate in DTO classes rather
-  than inside functions.
+- Wrap a primitive that stands for a domain concept in its own type.
+- A type mirroring a Prisma model or enum derives from `ModelRow<'Model'>` (`ModelRow<'User'>['role']`,
+  `Pick`/`Omit<ModelRow<'User'>, …>`), imported from `@repo/prisma` where it's used. Keep the column's name.
 - Mark data that doesn't change `readonly`, and literal tables `as const`.
 - Numbers with meaning are named constants (limits, windows, lengths). Tests may pin literal values on
   purpose: flag only a test literal that silently duplicates a constant the test is about.
@@ -30,15 +36,19 @@ machine live in `.claude/rules/` and the linters, so they're not repeated here.
 - Small, single-purpose classes: under 10 public methods and 10 properties.
 - Composition over inheritance. Extending a framework class through its documented hooks (for example
   `ThrottlerGuard.handleRequest`) is fine.
-- JSDoc on every exported class and on public methods.
+- JSDoc on every exported class, function and public method.
 
 ### Exceptions
 
 - Throw for what you don't expect. Catch only to recover from an expected case or to add context;
-  everything else goes to Nest's global handler.
+  everything else goes to the framework's handler (Nest's global handler, the QueryClient's `onError`).
 
 ### Tests
 
 - Arrange-Act-Assert (unit) / Given-When-Then (e2e).
 - Expected values come from the spec or a known-good literal, never recomputed the way the code computes
   them.
+
+## apps/api only
+
+- Validate request input in DTO classes, not inside functions.

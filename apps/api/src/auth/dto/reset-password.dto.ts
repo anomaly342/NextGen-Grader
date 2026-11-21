@@ -3,7 +3,7 @@ import { IsString, Length } from 'class-validator';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
-} from '@/auth/auth.constants';
+} from '@repo/lib/auth/credential-rules';
 
 /** Body of POST /auth/password/reset. Same length rules as Credential setup. */
 export class ResetPasswordDto {

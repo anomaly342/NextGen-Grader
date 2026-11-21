@@ -6,7 +6,7 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
-} from '@/auth/auth.constants';
+} from '@repo/lib/auth/credential-rules';
 
 /** Body of POST /auth/setup. */
 export class SetupCredentialsDto {
