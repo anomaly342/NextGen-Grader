@@ -1,6 +1,7 @@
 // @ts-check
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import { ERROR_CODE_COMPARISON } from '../../eslint.shared.mjs';
 
 export default tseslint.config(
   { ignores: ['eslint.config.mjs'] },
@@ -13,5 +14,10 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+  },
+  {
+    // Tests compare against known-good literals on purpose (CODING_STANDARDS.md).
+    ignores: ['**/*.test.ts'],
+    rules: { 'no-restricted-syntax': ['error', ERROR_CODE_COMPARISON] },
   },
 );

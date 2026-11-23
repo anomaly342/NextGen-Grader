@@ -2,7 +2,8 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
-/* Apps import this file; Tailwind only scans the importing app, so name the shared components too. */
+/* Without this, Tailwind in the apps only finds component files git already tracks, so a component
+   just added with `shadcn add` renders unstyled until committed. globals.test.ts keeps this line. */
 @source '../components';
 
 @custom-variant dark (&:is(.dark *));

@@ -27,7 +27,6 @@ machine live in `.claude/rules/` and the linters, so they're not repeated here.
 - Prefer early returns and `map` / `filter` / `reduce` over nested blocks. Arrow functions for one-liners,
   named functions otherwise.
 - Default parameter values rather than `null` / `undefined` checks.
-- No blank lines inside a function body.
 - Complete words, not abbreviations, except standard ones (`API`, `URL`, `i`, `j`, `err`, `ctx`, and `req`,
   `res`, `next` in middleware and guards).
 

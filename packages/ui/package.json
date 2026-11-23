@@ -11,7 +11,9 @@
     "./*": "./src/components/*.tsx"
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -27,9 +29,13 @@
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/bun": "^1.4.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.18.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "^8.20.0"
   }
 }

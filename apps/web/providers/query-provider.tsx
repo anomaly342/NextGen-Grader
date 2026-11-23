@@ -11,7 +11,7 @@ import {
 import { useState, type ReactNode } from 'react';
 
 /** TanStack Query for client components, with auth errors handled in one place. */
-export function QueryProvider({ children }: QueryProviderProps) {
+export function QueryProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -39,7 +39,3 @@ function canRetryQuery(failureCount: number, error: unknown): boolean {
 }
 
 const MAX_QUERY_RETRIES = 3;
-
-interface QueryProviderProps {
-  children: ReactNode;
-}

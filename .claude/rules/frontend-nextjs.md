@@ -34,6 +34,9 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 - Middleware and server components use the app's server-only client (`apps/web/lib/server-client.ts`). It reads `API_INTERNAL_URL` and forwards
   the request's cookies. Server components fetch and pass props.
 - In client components, server state goes through TanStack Query via the browser client. No `fetch` in components.
+- Each mutation lives in its own hook, `apps/web/hooks/use-<action>.ts`, not inline in a component. The hook
+  returns named fields (`{ login, isBusy, error }`), never TanStack's whole result object. Use `mutate`;
+  reach for `mutateAsync` only when the caller awaits the result.
 - Each piece of server data has one owner: a server component or a query, never both on one page.
   After a mutation, refresh the owner: `router.refresh()` for server-component data, `invalidateQueries` for query data.
 - The browser client handles auth errors in one place: 401 `NOT_SIGNED_IN` → `/login?next=<current>`,
@@ -45,6 +48,7 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
   in `packages/lib` beside the socket; on reconnect it invalidates its resource's queries to catch missed events.
   Components read from Query only.
 - Switch on the backend's error `code`, not on message text. Keep a map from code to user-facing text.
+  Compare against `AUTH_ERROR_CODE` from `@repo/lib/auth/error-codes`, the list the API throws with.
 - Show times in Asia/Bangkok; send and receive ISO UTC.
 - Never compute anything that decides access, deadlines or scores on the client; show what the API returns.
   Deadline countdowns are display only.

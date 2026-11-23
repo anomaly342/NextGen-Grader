@@ -25,6 +25,8 @@ so a package has to stay loadable by all three of them.
 ## Adding a package to an app
 
 1. `bun add "@repo/<name>@workspace:*"` in the app.
-2. For a Next app, add it to `transpilePackages`.
+2. For a Next app, add it to `transpilePackages`. If the package's files use Tailwind classes, its CSS entry needs
+   `@source` pointing at them (see `packages/ui/src/styles/globals.css`). Without it, Tailwind finds package
+   files only once git tracks them, so new files render unstyled until committed while CI looks fine.
 3. Run the app's `check-types`. For the API, also run `bun run build` and `node -e "require('./dist/main')"`,
    or at least require one built file that imports the package, to confirm Node can load it.
