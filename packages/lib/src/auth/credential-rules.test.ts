@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { checkPassword, checkUsername } from './credential-rules.ts';
+import {
+  checkPassword,
+  checkUsername,
+  isPasswordConfirmed,
+} from './credential-rules.ts';
 
 describe('checkUsername', () => {
   test('accepts 4–20 lowercase letters, digits and underscores', () => {
@@ -38,5 +42,20 @@ describe('checkPassword', () => {
 
   test('rejects more than 72 characters', () => {
     expect(checkPassword('x'.repeat(73))).toBe('TOO_LONG');
+  });
+});
+
+describe('isPasswordConfirmed', () => {
+  test('accepts a confirmation equal to the password', () => {
+    expect(isPasswordConfirmed('labpass2027', 'labpass2027')).toBe(true);
+  });
+
+  test('rejects a different confirmation, case included', () => {
+    expect(isPasswordConfirmed('labpass2072', 'labpass2027')).toBe(false);
+    expect(isPasswordConfirmed('Labpass2027', 'labpass2027')).toBe(false);
+  });
+
+  test('rejects an empty confirmation, even of an empty password', () => {
+    expect(isPasswordConfirmed('', '')).toBe(false);
   });
 });

@@ -36,7 +36,9 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 - In client components, server state goes through TanStack Query via the browser client. No `fetch` in components.
 - Each mutation lives in its own hook, `apps/web/src/hooks/use-<action>.ts`, not inline in a component. The hook
   returns named fields (`{ login, isBusy, error }`), never TanStack's whole result object. Use `mutate`;
-  reach for `mutateAsync` only when the caller awaits the result.
+  reach for `mutateAsync` only when the caller awaits the result. Pass TanStack's fields through under their own
+  names (`isPending`, `isSuccess`, `isError`). A new name is only for a value the hook derives
+  (`isBusy: isPending || isSuccess` while the page navigates away).
 - Each piece of server data has one owner: a server component or a query, never both on one page.
   After a mutation, refresh the owner: `router.refresh()` for server-component data, `invalidateQueries` for query data.
 - The browser client handles auth errors in one place: 401 `NOT_SIGNED_IN` → `/login?next=<current>`,
@@ -71,8 +73,10 @@ everything below; no hand-rolled validity or touched flags.
   issue code to text. The same functions back the API DTOs.
 - A field shows `field.state.meta.errors` under its input when
   `!meta.isValid && ((meta.isDirty && meta.isBlurred) || hasTriedSubmit)`, with
-  `hasTriedSubmit = useSelector(form.store, (s) => s.submissionAttempts > 0)`. `aria-invalid`, `data-invalid` and
-  `aria-describedby` follow the same condition.
+  `hasTriedSubmit = useSelector(form.store, (s) => s.submissionAttempts > 0)` (`isShowingErrors` in
+  `apps/web/src/lib/field-errors.ts`). `aria-invalid`, `data-invalid` and `aria-describedby` follow the same condition.
+- A field whose rules are listed under it (`/account`, `/account/reset-password`) uses `RuleChecklist` from
+  `components/common/`: a rule turns green once met and red only under the condition above.
 - Submit button: `<form.Subscribe selector={(s) => s.isValid && !s.isPristine}>` → `disabled={!canSubmit || isBusy}`.
 - Read form state with `useSelector`, not the deprecated `useStore`.
 - Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) goes into that

@@ -33,3 +33,14 @@ export function checkPassword(password: string): PasswordIssue | null {
   if (password.length > PASSWORD_MAX_LENGTH) return 'TOO_LONG';
   return null;
 }
+
+/**
+ * Whether the confirmation is filled in and equal to `password`. Checked in
+ * the browser only: the API never sees the confirmation.
+ */
+export function isPasswordConfirmed(
+  confirmPassword: string,
+  password: string,
+): boolean {
+  return confirmPassword !== '' && confirmPassword === password;
+}

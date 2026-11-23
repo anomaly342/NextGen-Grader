@@ -33,6 +33,7 @@ import { CircleAlertIcon } from 'lucide-react';
 import { useRef } from 'react';
 import { useFinishSetup } from '@/hooks/use-finish-setup';
 import { useLogout } from '@/hooks/use-logout';
+import { isShowingErrors } from '@/lib/field-errors';
 
 /**
  * The `/setup` card (Credential setup): the signed-in University account with
@@ -364,17 +365,4 @@ function getDescribedBy(inputId: string, hasError: boolean): string {
   return hasError
     ? `${inputId}-error ${inputId}-description`
     : `${inputId}-description`;
-}
-
-/**
- * Whether to show a field's errors: once the User has changed it and left it,
- * or tried to submit. Not on a field they only tabbed through (the form-level
- * validator gives every field its errors on any change), and not while they
- * first type in it. After that they update live as the User fixes the field.
- */
-function isShowingErrors(
-  meta: { isValid: boolean; isDirty: boolean; isBlurred: boolean },
-  hasTriedSubmit: boolean,
-): boolean {
-  return !meta.isValid && ((meta.isDirty && meta.isBlurred) || hasTriedSubmit);
 }
