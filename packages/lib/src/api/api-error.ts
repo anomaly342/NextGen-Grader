@@ -1,4 +1,4 @@
-import { AuthErrorCode } from '../auth/error-codes';
+import type { AuthErrorCode } from '../auth/error-codes.ts';
 /** A non-2xx answer from the API. Switch on `code`, never on the message text. */
 
 export class ApiError extends Error {

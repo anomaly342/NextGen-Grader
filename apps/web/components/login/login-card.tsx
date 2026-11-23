@@ -1,7 +1,6 @@
 'use client';
 
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
-import { ApiError } from '@repo/lib/api/api-error';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
@@ -20,7 +19,7 @@ import { CircleAlertIcon, ClockIcon } from 'lucide-react';
 import { useRef } from 'react';
 import { useCountdown } from '@/hooks/use-countdown';
 import { useGoogleLogin } from '@/hooks/use-google-login';
-import { useLogin } from '@/hooks/use-login';
+import { getRetryAfterSeconds, useLogin } from '@/hooks/use-login';
 import { GoogleIcon } from './google-icon';
 
 /**
@@ -40,20 +39,26 @@ export function LoginCard({
   const { secondsLeft, startCountdown } = useCountdown();
 
   const { startGoogleLogin, isBusy: isGoogleBusy } = useGoogleLogin();
-  const { loginAsync, isBusy: isFormBusy, error: loginError } = useLogin(next);
+  const {
+    login,
+    isBusy: isFormBusy,
+    isError: isLoginError,
+    error: formErrorCode,
+    retryAfterSeconds,
+  } = useLogin(next);
 
   const form = useForm({
     defaultValues: { username: '', password: '' },
     onSubmit: ({ value }) =>
-      loginAsync(value, {
+      login(value, {
         onError: (error) => {
           form.setFieldValue('password', '');
           // Focus reads the field's error out, through aria-describedby.
           if (error.code === AUTH_ERROR_CODE.INVALID_CREDENTIALS) {
             passwordInput.current?.focus();
           }
-          const retryAfterSec = getRetryAfterSec(error);
-          if (retryAfterSec !== null) startCountdown(retryAfterSec);
+          const seconds = getRetryAfterSeconds(error);
+          if (seconds !== null) startCountdown(seconds);
         },
       }),
   });
@@ -61,14 +66,12 @@ export function LoginCard({
   const isBusy = isGoogleBusy || isFormBusy;
   const isLockedOut = secondsLeft > 0;
 
-  const formErrorCode = getErrorCode(loginError);
   const isWrongPassword = formErrorCode === AUTH_ERROR_CODE.INVALID_CREDENTIALS;
   const isRateLimited = formErrorCode === AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS;
-  // Without `retryAfterSec` the message stays; with it, it goes when the countdown ends.
+  // Without `retryAfterSeconds` the message stays; with it, it goes when the countdown ends.
   const isShowingRateLimit =
-    isRateLimited && (isLockedOut || getRetryAfterSec(loginError) === null);
-  const hasOtherFormError =
-    loginError !== null && !isWrongPassword && !isRateLimited;
+    isRateLimited && (isLockedOut || retryAfterSeconds === null);
+  const hasOtherFormError = isLoginError && !isWrongPassword && !isRateLimited;
 
   const bannerMessage = errorCode && getErrorMessage(errorCode);
 
@@ -260,20 +263,6 @@ const FORM_MESSAGE_ID = 'login-form-message';
 const RESET_PASSWORD_PATH = '/account/reset-password';
 
 const SECONDS_PER_MINUTE = 60;
-
-/** `retryAfterSec` from a 429 `TOO_MANY_ATTEMPTS` body, or null. */
-function getRetryAfterSec(error: unknown): number | null {
-  if (
-    !(error instanceof ApiError) ||
-    error.code !== AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS
-  ) {
-    return null;
-  }
-  const retryAfterSec = error.body?.['retryAfterSec'];
-  return typeof retryAfterSec === 'number' && retryAfterSec > 0
-    ? Math.ceil(retryAfterSec)
-    : null;
-}
 
 /** `m:ss`, e.g. 42 → `0:42`. */
 function formatCountdown(seconds: number): string {

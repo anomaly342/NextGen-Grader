@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
  */
 export function useLogin(next: string | null) {
   const router = useRouter();
-  const { mutateAsync, isPending, isSuccess, isError, error } = useMutation<
+  const { mutate, isPending, isSuccess, isError, error } = useMutation<
     unknown,
     ApiError,
     { username: string; password: string }
@@ -33,7 +33,7 @@ export function useLogin(next: string | null) {
   });
 
   return {
-    loginAsync: mutateAsync,
+    login: mutate,
     isBusy: isPending || isSuccess,
     isError,
     error: getAuthErrorCode(error),
@@ -49,7 +49,7 @@ function getAuthErrorCode(error: Error | null): AuthErrorCode | null {
 }
 
 /** `retryAfterSec` from a 429 `TOO_MANY_ATTEMPTS` body, rounded up, or null. */
-function getRetryAfterSeconds(error: Error | null): number | null {
+export function getRetryAfterSeconds(error: Error | null): number | null {
   if (
     !(error instanceof ApiError) ||
     error.code !== AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS
