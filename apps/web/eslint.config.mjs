@@ -11,6 +11,21 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    // The editor's ESLint runs every workspace in one process; without this, typescript-eslint
+    // tries to infer the root, sees packages/lib and apps/api, and refuses to pick one.
+    languageOptions: {
+      parserOptions: { tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  {
+    // Typed linting for app code only: root .mjs files are not in tsconfig.
+    files: ["src/**/*.{ts,tsx}"],
+    languageOptions: {
+      parserOptions: { projectService: true },
+    },
+    rules: { "@typescript-eslint/no-deprecated": "error" },
+  },
+  {
     rules: {
       "no-restricted-imports": ["error", { patterns: [UI_COMPONENTS_IMPORT] }],
       "no-restricted-syntax": ["error", ERROR_CODE_COMPARISON],

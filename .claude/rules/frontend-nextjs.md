@@ -61,15 +61,28 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 
 ## Forms
 
+Reference implementation: `apps/web/src/components/setup/setup-card.tsx`. Use TanStack Form's own state for
+everything below; no hand-rolled validity or touched flags.
+
 - Every form uses TanStack Form (`@tanstack/react-form`) with shadcn fields from `packages/ui`.
-- Field validators call the plain rule functions in `packages/lib` (`checkUsername` → `UsernameIssue`) and map the
+- Validation is one form-level `validators.onChange` returning `{ fields: { <name>: text | undefined } }`, so every
+  change checks every field (a field-level validator only runs when its own field changes, leaving untouched fields
+  "valid"). It calls the plain rule functions in `packages/lib` (`checkUsername` → `UsernameIssue`) and maps the
   issue code to text. The same functions back the API DTOs.
-- Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) shows under
-  that field; anything else shows above the form via `getErrorMessage(code)`.
+- A field shows `field.state.meta.errors` under its input when
+  `!meta.isValid && ((meta.isDirty && meta.isBlurred) || hasTriedSubmit)`, with
+  `hasTriedSubmit = useSelector(form.store, (s) => s.submissionAttempts > 0)`. `aria-invalid`, `data-invalid` and
+  `aria-describedby` follow the same condition.
+- Submit button: `<form.Subscribe selector={(s) => s.isValid && !s.isPristine}>` → `disabled={!canSubmit || isBusy}`.
+- Read form state with `useSelector`, not the deprecated `useStore`.
+- Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) goes into that
+  field's `errorMap.onSubmit` via `form.setFieldMeta`, and the field's `listeners.onChange` clears it with
+  `setErrorMap({ onSubmit: undefined })`. Anything else shows above the form via `getErrorMessage(code)`.
 
 ## Loading and errors
 
-- Each route segment has `loading.tsx` and `error.tsx`.
+- Each route segment has `loading.tsx` and `error.tsx`. They render `PageLoading` and `PageError` from
+  `apps/web/src/components/common/` (`PageError` takes the route's title and Next's `retry`).
 - Form errors show inline in the form. Mutation errors outside a form show as a toast (shadcn `sonner`).
 
 ## Uploads

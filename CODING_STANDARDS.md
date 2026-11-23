@@ -9,6 +9,8 @@ machine live in `.claude/rules/` and the linters, so they're not repeated here.
 
 - Every new export has a caller in the same change, unless the ticket's acceptance criteria name it.
   Clients, wrappers and endpoint maps arrive with their first caller.
+- A function called once whose only job is to hold a callback's body (a validator, an `onSuccess`) is written
+  inline in that callback instead.
 
 ### Types and data
 
@@ -47,6 +49,13 @@ machine live in `.claude/rules/` and the linters, so they're not repeated here.
 - Arrange-Act-Assert (unit) / Given-When-Then (e2e).
 - Expected values come from the spec or a known-good literal, never recomputed the way the code computes
   them.
+
+## apps/web only
+
+- Destructure a hook's result under the names it returns (`const { finishSetup, isBusy, error } = …`). Alias only
+  when two names in scope clash (`useLogout`'s `isBusy: isLoggingOut` beside another hook's `isBusy`).
+- A pure helper inside a component file is a module-level function that takes component state as parameters
+  (`isShowingErrors(meta, hasTriedSubmit)`). The component body holds hooks, event handlers and JSX only.
 
 ## apps/api only
 

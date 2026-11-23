@@ -22,7 +22,7 @@ async function bootstrap(): Promise<void> {
       content: document,
       hideModels: true,
       hideClientButton: true,
-      hideDownloadButton: true,
+      documentDownloadType: 'none',
       hideDarkModeToggle: true,
       showDeveloperTools: 'never',
       mcp: { disabled: true },

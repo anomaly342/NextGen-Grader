@@ -16,6 +16,7 @@ export default tseslint.config(
     },
     rules: {
       'no-restricted-imports': ['error', { patterns: [UI_COMPONENTS_IMPORT] }],
+      '@typescript-eslint/no-deprecated': 'error',
     },
   },
   {

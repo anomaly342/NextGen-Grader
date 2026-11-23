@@ -14,6 +14,7 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: { '@typescript-eslint/no-deprecated': 'error' },
   },
   {
     // Tests compare against known-good literals on purpose (CODING_STANDARDS.md).
