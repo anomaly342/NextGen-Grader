@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import type { CookieOptions } from 'express';
 
 /** Cookie holding the OAuth `state` between /auth/google and its callback (CSRF check). */
@@ -19,9 +20,9 @@ export const GOOGLE_AUTH_COOKIE_PATH = '/api/auth/google';
  * LOGIN_EXPIRED covers a missing, mismatched or expired state or code.
  */
 export const GOOGLE_CALLBACK_ERROR_CODES = [
-  'LOGIN_EXPIRED',
-  'EMAIL_NOT_VERIFIED',
-  'DOMAIN_NOT_ALLOWED',
+  AUTH_ERROR_CODE.LOGIN_EXPIRED,
+  AUTH_ERROR_CODE.EMAIL_NOT_VERIFIED,
+  AUTH_ERROR_CODE.DOMAIN_NOT_ALLOWED,
 ] as const;
 
 /** Google scopes: an ID token with the user's email, name and picture. */

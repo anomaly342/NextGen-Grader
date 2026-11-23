@@ -1,4 +1,3 @@
-import 'server-only';
 import { ApiError } from '@repo/lib/api/api-error';
 import type { ModelRow } from '@repo/prisma';
 
@@ -11,8 +10,7 @@ type Me = Omit<
 /**
  * The server-only client, for the proxy (middleware) and server components.
  * It is the only code that knows the Nest host (`API_INTERNAL_URL`) and it
- * forwards the incoming request's cookies. `server-only` makes importing it
- * into a client component a build error.
+ * forwards the incoming request's cookies. Never import it from a client component.
  */
 
 /** Same default as `next.config`'s `/api` rewrite. */

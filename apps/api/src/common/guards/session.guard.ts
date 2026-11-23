@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import {
   CanActivate,
   ExecutionContext,
@@ -27,7 +28,7 @@ export class SessionGuard implements CanActivate {
       : null;
     if (!user) {
       throw new UnauthorizedException({
-        code: 'NOT_SIGNED_IN',
+        code: AUTH_ERROR_CODE.NOT_SIGNED_IN,
         message: 'Sign in first',
       });
     }

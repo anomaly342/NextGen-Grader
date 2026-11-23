@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import {
   ConflictException,
   ForbiddenException,
@@ -76,7 +77,7 @@ export class AuthService {
     const user = await this.claimCredentials(userId, username, passwordHash);
     if (!user) {
       throw new ConflictException({
-        code: 'SETUP_ALREADY_DONE',
+        code: AUTH_ERROR_CODE.SETUP_ALREADY_DONE,
         message: 'Username and password are already set',
       });
     }
@@ -117,7 +118,7 @@ export class AuthService {
     );
     if (!user?.passwordHash || !isPasswordValid) {
       throw new UnauthorizedException({
-        code: 'INVALID_CREDENTIALS',
+        code: AUTH_ERROR_CODE.INVALID_CREDENTIALS,
         message: 'Wrong username or password',
       });
     }
@@ -188,7 +189,7 @@ export class AuthService {
     );
     if (!user?.passwordHash || !isCurrentPasswordValid) {
       throw new UnauthorizedException({
-        code: 'INVALID_CREDENTIALS',
+        code: AUTH_ERROR_CODE.INVALID_CREDENTIALS,
         message: 'Wrong password',
       });
     }
@@ -209,7 +210,7 @@ export class AuthService {
     const session = await this.requireCurrentUserSession(cookieId, userId);
     if (!this.isRecentGoogleSignIn(session)) {
       throw new ForbiddenException({
-        code: 'RECENT_GOOGLE_SIGN_IN_REQUIRED',
+        code: AUTH_ERROR_CODE.RECENT_GOOGLE_SIGN_IN_REQUIRED,
         message: 'Sign in with your University account again',
       });
     }
@@ -274,7 +275,7 @@ export class AuthService {
   /** The 409 for a username another User already has. */
   private createUsernameTakenError(): ConflictException {
     return new ConflictException({
-      code: 'USERNAME_TAKEN',
+      code: AUTH_ERROR_CODE.USERNAME_TAKEN,
       message: 'That username is taken',
     });
   }
@@ -292,7 +293,7 @@ export class AuthService {
   /** The 401 for a request whose session no longer matches a signed-in User. */
   private createNotSignedInError(): UnauthorizedException {
     return new UnauthorizedException({
-      code: 'NOT_SIGNED_IN',
+      code: AUTH_ERROR_CODE.NOT_SIGNED_IN,
       message: 'Sign in first',
     });
   }
@@ -326,13 +327,13 @@ export class AuthService {
     const payload = ticket.getPayload();
     if (!payload?.email || !payload.email_verified) {
       throw new UnauthorizedException({
-        code: 'EMAIL_NOT_VERIFIED',
+        code: AUTH_ERROR_CODE.EMAIL_NOT_VERIFIED,
         message: 'Google account has no verified email',
       });
     }
     if (!this.isAllowedEmail(payload.email)) {
       throw new ForbiddenException({
-        code: 'DOMAIN_NOT_ALLOWED',
+        code: AUTH_ERROR_CODE.DOMAIN_NOT_ALLOWED,
         message: `Sign in with your @${ALLOWED_EMAIL_DOMAINS.join(' or @')} account`,
       });
     }
@@ -353,7 +354,7 @@ export class AuthService {
       // Expired, reused or forged code: same answer as a missing token.
     }
     throw new UnauthorizedException({
-      code: 'LOGIN_EXPIRED',
+      code: AUTH_ERROR_CODE.LOGIN_EXPIRED,
       message: 'Invalid Google authorization code',
     });
   }

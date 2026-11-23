@@ -1,17 +1,6 @@
-/** Error `code`s the auth API returns, plus the ones `/login?error=` carries back from Google sign-in. */
-export type AuthErrorCode =
-  | 'NOT_SIGNED_IN'
-  | 'CREDENTIAL_SETUP_REQUIRED'
-  | 'INVALID_CREDENTIALS'
-  | 'TOO_MANY_ATTEMPTS'
-  | 'USERNAME_TAKEN'
-  | 'SETUP_ALREADY_DONE'
-  | 'RECENT_GOOGLE_SIGN_IN_REQUIRED'
-  | 'LOGIN_EXPIRED'
-  | 'EMAIL_NOT_VERIFIED'
-  | 'DOMAIN_NOT_ALLOWED';
+import { isAuthErrorCode, type AuthErrorCode } from './error-codes.ts';
 
-/** User-facing text for each code. Switch on the code, never on the API's message text. */
+/** User-facing text for each code. The `Record` makes TypeScript require every code. Switch on the code, never on the API's message text. */
 const ERROR_MESSAGES: Readonly<Record<AuthErrorCode, string>> = {
   NOT_SIGNED_IN: 'You are signed out. Sign in again.',
   CREDENTIAL_SETUP_REQUIRED: 'Choose a username and password first.',
@@ -31,8 +20,5 @@ const FALLBACK_MESSAGE = 'Something went wrong. Try again.';
 
 /** Text to show for an API error `code` (or `?error=`); a general message for anything unknown. */
 export function getErrorMessage(code: string | null | undefined): string {
-  if (code != null && Object.hasOwn(ERROR_MESSAGES, code)) {
-    return ERROR_MESSAGES[code as AuthErrorCode];
-  }
-  return FALLBACK_MESSAGE;
+  return isAuthErrorCode(code) ? ERROR_MESSAGES[code] : FALLBACK_MESSAGE;
 }

@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '../auth/error-codes.ts';
 import { getSameSitePath } from '../auth/next-path.ts';
 import { ApiError } from './api-error.ts';
 
@@ -29,12 +30,15 @@ export function redirectOnAuthError(
   location: BrowserLocation = window.location,
 ): boolean {
   if (!(error instanceof ApiError)) return false;
-  if (error.status === 401 && error.code === 'NOT_SIGNED_IN') {
+  if (error.status === 401 && error.code === AUTH_ERROR_CODE.NOT_SIGNED_IN) {
     queryClient.clear();
     goTo('/login', location);
     return true;
   }
-  if (error.status === 403 && error.code === 'CREDENTIAL_SETUP_REQUIRED') {
+  if (
+    error.status === 403 &&
+    error.code === AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED
+  ) {
     goTo('/setup', location);
     return true;
   }

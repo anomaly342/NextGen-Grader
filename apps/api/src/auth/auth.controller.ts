@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import {
   Body,
   Controller,
@@ -84,7 +85,7 @@ export class AuthController {
     status: 403,
     description:
       'This browser already has a User session whose Credential setup is not done.',
-    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED),
   })
   @ApiOkResponse({
     description: 'The Google sign-in URL.',
@@ -162,7 +163,7 @@ export class AuthController {
     res.clearCookie(OAUTH_STATE_COOKIE_NAME, { path: GOOGLE_AUTH_COOKIE_PATH });
     const oauthState = this.readOAuthState(rawOAuthState);
     if (!code || !state || !oauthState || state !== oauthState.state) {
-      return this.redirectToLoginError(res, 'LOGIN_EXPIRED');
+      return this.redirectToLoginError(res, AUTH_ERROR_CODE.LOGIN_EXPIRED);
     }
     let cookieId: string;
     try {
@@ -193,12 +194,12 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   @ApiResponse({
     status: 409,
     description: '`USERNAME_TAKEN` or `SETUP_ALREADY_DONE`.',
-    schema: errorSchema('USERNAME_TAKEN'),
+    schema: errorSchema(AUTH_ERROR_CODE.USERNAME_TAKEN),
   })
   async setupCredentials(
     @CurrentUser() sessionUser: SessionUser,
@@ -228,20 +229,20 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Unknown username or wrong password (same error for both).',
-    schema: errorSchema('INVALID_CREDENTIALS'),
+    schema: errorSchema(AUTH_ERROR_CODE.INVALID_CREDENTIALS),
   })
   @ApiResponse({
     status: 403,
     description:
       'This browser already has a User session whose Credential setup is not done.',
-    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED),
   })
   @ApiResponse({
     status: 429,
     description:
       'Too many tries for this username or from this IP. Body includes `retryAfterSec`; ' +
       'the `Retry-After` header carries the same value.',
-    schema: errorSchema('TOO_MANY_ATTEMPTS', {
+    schema: errorSchema(AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS, {
       retryAfterSec: { type: 'integer', example: 42 },
     }),
   })
@@ -268,7 +269,7 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in, or `ngg.sid` is not a current User session.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   getMe(@CurrentUser() sessionUser: SessionUser): Promise<UserDto> {
     return this.authService.getMe(sessionUser);
@@ -289,17 +290,17 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   @ApiResponse({
     status: 403,
     description: 'Credential setup is not done.',
-    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED),
   })
   @ApiResponse({
     status: 409,
     description: 'Another User has that username.',
-    schema: errorSchema('USERNAME_TAKEN'),
+    schema: errorSchema(AUTH_ERROR_CODE.USERNAME_TAKEN),
   })
   changeUsername(
     @CurrentUser() sessionUser: SessionUser,
@@ -330,7 +331,7 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in, or the current password is wrong.',
-    schema: errorSchema('INVALID_CREDENTIALS'),
+    schema: errorSchema(AUTH_ERROR_CODE.INVALID_CREDENTIALS),
   })
   async changePassword(
     @CurrentUser() sessionUser: SessionUser,
@@ -365,13 +366,13 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   @ApiResponse({
     status: 403,
     description:
       'This session was not started by a Google sign-in in the last 10 minutes.',
-    schema: errorSchema('RECENT_GOOGLE_SIGN_IN_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.RECENT_GOOGLE_SIGN_IN_REQUIRED),
   })
   async resetPassword(
     @CurrentUser() sessionUser: SessionUser,
@@ -396,7 +397,7 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   async logout(
     @Cookies(SESSION_COOKIE_NAME) cookieId: string,

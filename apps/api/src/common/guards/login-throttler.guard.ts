@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import {
   ExecutionContext,
   HttpException,
@@ -47,7 +48,7 @@ export class LoginThrottlerGuard extends ThrottlerGuard {
     this.setResponseHeader(res, 'Retry-After', timeToBlockExpire);
     throw new HttpException(
       {
-        code: 'TOO_MANY_ATTEMPTS',
+        code: AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS,
         message: 'Too many sign-in tries. Wait and try again.',
         retryAfterSec: timeToBlockExpire,
       },

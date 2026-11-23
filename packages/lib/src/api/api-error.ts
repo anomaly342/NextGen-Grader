@@ -1,14 +1,19 @@
+import { AuthErrorCode } from '../auth/error-codes';
 /** A non-2xx answer from the API. Switch on `code`, never on the message text. */
+
 export class ApiError extends Error {
   /** HTTP status, e.g. 401. */
   readonly status: number;
   /** The body's `code` (e.g. `NOT_SIGNED_IN`), or null when it has none (e.g. a 400 validation error). */
-  readonly code: string | null;
+  readonly code: AuthErrorCode | null;
   /** The parsed JSON body, or null when the body was not JSON. Carries extras such as `retryAfterSec`. */
   readonly body: Record<string, unknown> | null;
 
   constructor(status: number, body: Record<string, unknown> | null) {
-    const code = typeof body?.['code'] === 'string' ? body['code'] : null;
+    const code =
+      typeof body?.['code'] === 'string'
+        ? (body['code'] as AuthErrorCode)
+        : null;
     super(`API ${status}${code ? ` ${code}` : ''}`);
     this.name = 'ApiError';
     this.status = status;
