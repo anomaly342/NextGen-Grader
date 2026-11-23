@@ -1,4 +1,5 @@
-import type { AuthErrorCode } from '../auth/error-codes.ts';
+import { isAuthErrorCode, type AuthErrorCode } from '../auth/error-codes.ts';
+
 /** A non-2xx answer from the API. Switch on `code`, never on the message text. */
 
 export class ApiError extends Error {
@@ -34,4 +35,11 @@ export class ApiError extends Error {
     }
     return new ApiError(res.status, body);
   }
+}
+
+/** The failure's auth error code, or null when it has none (not an ApiError, a 5xx, a 400 validation error). */
+export function getAuthErrorCode(error: unknown): AuthErrorCode | null {
+  return error instanceof ApiError && isAuthErrorCode(error.code)
+    ? error.code
+    : null;
 }

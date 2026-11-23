@@ -1,12 +1,8 @@
 'use client';
 
-import { ApiError } from '@repo/lib/api/api-error';
+import { ApiError, getAuthErrorCode } from '@repo/lib/api/api-error';
 import { apiRequest } from '@repo/lib/api/browser-client';
-import {
-  AUTH_ERROR_CODE,
-  isAuthErrorCode,
-  type AuthErrorCode,
-} from '@repo/lib/auth/error-codes';
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
@@ -39,13 +35,6 @@ export function useLogin(next: string | null) {
     error: getAuthErrorCode(error),
     retryAfterSeconds: getRetryAfterSeconds(error),
   };
-}
-
-/** The failure's auth error code, or null when it has none. */
-function getAuthErrorCode(error: Error | null): AuthErrorCode | null {
-  return error instanceof ApiError && isAuthErrorCode(error.code)
-    ? error.code
-    : null;
 }
 
 /** `retryAfterSec` from a 429 `TOO_MANY_ATTEMPTS` body, rounded up, or null. */

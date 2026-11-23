@@ -1,5 +1,6 @@
 'use client';
 
+import { getInitials } from '@repo/lib/user/initials';
 import type { ModelRow } from '@repo/prisma';
 import { Avatar, AvatarFallback } from '@repo/ui/avatar';
 import { Button } from '@repo/ui/button';
@@ -79,14 +80,4 @@ export function UserMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-/** Up to two initials from the Display name: "Pimchanok Srisuk" → "PS". */
-function getInitials(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join('');
 }

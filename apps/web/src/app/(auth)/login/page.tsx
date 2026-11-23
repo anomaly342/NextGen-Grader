@@ -1,6 +1,6 @@
 import { getSameSitePath } from '@repo/lib/auth/next-path';
 import type { Metadata } from 'next';
-import { Logo } from '@/components/common/logo';
+import { BrandLockup } from '@/components/common/brand-lockup';
 import { LoginCard } from '@/components/login/login-card';
 
 export const metadata: Metadata = { title: 'Sign in · NextGen Grader' };
@@ -10,17 +10,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   const { next, error } = await searchParams;
   return (
     <main className="bg-background flex flex-1 flex-col items-center gap-7 px-4 pt-[clamp(28px,9vh,96px)] pb-10">
-      <div className="flex items-center gap-2.5">
-        <Logo />
-        <p className="flex flex-col leading-tight">
-          <strong className="text-lg font-extrabold tracking-tight">
-            NextGen Grader
-          </strong>
-          <small className="text-muted-foreground text-xs font-semibold">
-            KMUTNB
-          </small>
-        </p>
-      </div>
+      <BrandLockup />
       <LoginCard
         next={getSameSitePath(next)}
         errorCode={typeof error === 'string' ? error : null}

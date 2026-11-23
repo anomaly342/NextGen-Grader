@@ -31,10 +31,10 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 - `packages/lib` holds pure helpers, the API client, and the socket. Clients use relative URLs.
   They do not know the Nest host. Each app's `next.config` rewrites `/api` to Nest `/api/v1` and proxies the socket.
   No `app/api` proxy route handlers. The apps do not import each other.
-- Middleware and server components use the app's server-only client (`apps/web/lib/server-client.ts`). It reads `API_INTERNAL_URL` and forwards
+- Middleware and server components use the app's server-only client (`apps/web/src/lib/server-client.ts`). It reads `API_INTERNAL_URL` and forwards
   the request's cookies. Server components fetch and pass props.
 - In client components, server state goes through TanStack Query via the browser client. No `fetch` in components.
-- Each mutation lives in its own hook, `apps/web/hooks/use-<action>.ts`, not inline in a component. The hook
+- Each mutation lives in its own hook, `apps/web/src/hooks/use-<action>.ts`, not inline in a component. The hook
   returns named fields (`{ login, isBusy, error }`), never TanStack's whole result object. Use `mutate`;
   reach for `mutateAsync` only when the caller awaits the result.
 - Each piece of server data has one owner: a server component or a query, never both on one page.
@@ -91,6 +91,9 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 
 ## Components
 
+- App code lives under `src/`: `src/app`, `src/components`, `src/hooks`, `src/lib`, `src/providers`, and
+  `src/proxy.ts`. Config files (`next.config.ts`, `tsconfig.json`, `eslint.config.mjs`) and `public/` stay at the app root.
+  `@/` points at `src/`.
 - Pages are server components that render client components for interactive parts. Put `'use client'` on the
   smallest interactive piece.
 - Named exports. Kebab-case file and directory names (`auth-wizard/login-form.tsx`).
