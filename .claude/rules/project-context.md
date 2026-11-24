@@ -16,6 +16,8 @@ Dolos plagiarism checks (exams only), and LLM problem drafting.
   file bytes (`fsobjects`, addressed by SHA-1)
 - Deployment (proxy chain, API instance count): `docs/ops/deployment.md`. Read it before touching anything keyed by
   client IP or held in process memory (rate limits, caches)
+- During iteration, run scoped checks (e.g. `bunx turbo check-types lint --filter=web`) and run the full monorepo suite
+  once before finishing
 
 ## Hard constraints
 

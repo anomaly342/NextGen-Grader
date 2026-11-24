@@ -32,6 +32,30 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // A later no-restricted-imports replaces the earlier one, so repeat UI_COMPONENTS_IMPORT.
+    files: ['src/components/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@repo/lib/api/browser-client',
+              message:
+                "Call the browser API client from a hook in 'src/hooks/', not from a component.",
+            },
+            {
+              name: '@tanstack/react-query',
+              message:
+                "Use TanStack Query from a hook in 'src/hooks/' (or 'src/providers/'), not from a component.",
+            },
+          ],
+          patterns: [UI_COMPONENTS_IMPORT],
+        },
+      ],
+    },
+  },
+  {
     // A later no-restricted-syntax replaces the earlier one, so repeat the shared entry.
     files: ['**/*.tsx'],
     rules: {

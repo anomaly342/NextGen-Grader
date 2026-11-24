@@ -1,4 +1,4 @@
-# 0003. Live username check: signed-in only, throttled per User
+# 0003. Live username check: signed-in only
 
 - Status: accepted
 - Date: 2026-11-24
@@ -13,24 +13,26 @@ sign-in handles.
 
 ## Decision
 
-Add `GET /auth/check-username`, answering whether a username is free, and accept that it reveals which usernames exist,
-under these limits:
+Add `GET /auth/check-username`, returning empty `200` when free and `409 USERNAME_TAKEN` when taken, and accept that it
+reveals which usernames exist under these constraints:
 
 - It needs a Session, so only a User who signed in with their University account can ask. It works before Credential
-  setup is done.
-- It is throttled per User, never per IP (the lab shares one IP; see [deployment](../ops/deployment.md)), with the
-  in-memory throttler from [ADR-0001](./0001-login-rate-limit-via-nestjs-throttler.md).
-- It is a hint only. Submit still gets 409 `USERNAME_TAKEN` from the unique constraint when two Users race.
+  setup is done (`@SkipCredentialSetup()`).
+- It is a hint only. Submit still gets `409 USERNAME_TAKEN` from the unique constraint when two Users race.
+- No in-process rate limiter is wired (`@nestjs/throttler` was removed; see
+  [ADR-0001](./0001-login-rate-limit-via-nestjs-throttler.md)). If rate limiting is added later, key it per User, never
+  per IP (the lab shares one IP; see [deployment](../ops/deployment.md)).
 
 ## Considered Options
 
 - **No live check, 409 on submit only.** Leaks the same fact, one submit at a time. Rejected: the User finds out late
   and has to retype.
-- **Public endpoint, throttled per IP.** Rejected: anyone could list usernames, and the shared lab IP would make the
-  limit hit everyone at once.
+- **Public endpoint.** Rejected: unauthenticated callers should not be able to enumerate usernames.
+- **Per-User in-memory throttling via `@nestjs/throttler`.** Removed alongside ADR-0001 to avoid carrying an in-process
+  throttler.
 
 ## Consequences
 
-- A signed-in User can learn whether a username exists, slowly. The login limit of 5 tries per username per minute still
-  applies to any username they learn.
-- Like ADR-0001, the counter is per API process; with N instances the real limit is up to N times higher.
+- Any signed-in User can check whether a username is taken. Unauthenticated callers get `401 NOT_SIGNED_IN`.
+- Because `200` means free and `409` means taken, TanStack Query caches only free `200` responses; `409` throws
+  `ApiError` and is never cached as a valid result.

@@ -1,6 +1,6 @@
 # 0001. Login rate limit via @nestjs/throttler
 
-- Status: accepted
+- Status: deprecated (removed `@nestjs/throttler` on 2026-11-24; no in-process rate limiter is wired)
 - Date: 2026-11-20
 - Issue: #12 (parent #5)
 

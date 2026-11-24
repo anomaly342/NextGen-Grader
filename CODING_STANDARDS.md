@@ -40,8 +40,8 @@ in `.claude/rules/` and the linters, so they're not repeated here.
 ### Classes and modules
 
 - Small, single-purpose classes: under 10 public methods and 10 properties.
-- Composition over inheritance. Extending a framework class through its documented hooks (for example
-  `ThrottlerGuard.handleRequest`) is fine.
+- Composition over inheritance. Extending a framework class through its documented hooks (for example NestJS's
+  `BaseExceptionFilter`) is fine.
 - JSDoc on every exported class, function and public method.
 
 ### Exceptions
