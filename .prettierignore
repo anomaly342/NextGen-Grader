@@ -23,3 +23,5 @@ apps/web/next-env.d.ts
 # Generated
 packages/prisma/migrations
 skills-lock.json
+# `next dev` rewrites its block word for word; reflowing it here would make the two fight
+apps/web/AGENTS.md
