@@ -20,9 +20,9 @@ rules marked _(checked)_. Style rules applied at review time live in `CODING_STA
   (`LoginDto`), responses and their row shapes too (`UserDto`, `UserDtoRow`).
 - Every other data type, `type` aliases included, goes in `interfaces/` as `.interface.ts` _(checked)_.
 - One export per file; only `.constants.ts` may export several _(checked)_.
-- `src/common/` holds shared code, one folder per kind: `guards/`, `decorators/`, `swagger/`, `utils/`.
-  **Every** guard and decorator lives there, even one only a single module uses today; such a guard may
-  import that module's constants (`login-throttler.guard.ts` → `@/auth/auth.constants`).
+- `src/common/` holds shared code, one folder per kind: `guards/`, `decorators/`, `middleware/`, `swagger/`,
+  `utils/`. **Every** guard, decorator and middleware lives there, even one only a single module uses today;
+  such a guard may import that module's constants (`login-throttler.guard.ts` → `@/auth/auth.constants`).
 - Helpers used by one class are `private` methods of it _(checked for services)_. Helpers shared across
   modules go in `src/common/utils/`.
 - `test/support/` (e2e doubles and helpers) mirrors `src/`'s layout, with shared types in

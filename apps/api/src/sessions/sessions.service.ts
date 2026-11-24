@@ -4,7 +4,6 @@ import { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
 import { SessionPayload } from './interfaces/session-payload.interface';
 import { SessionRecord } from './interfaces/session-record.interface';
-import { SessionUser } from './interfaces/session-user.interface';
 import { SESSION_KEY_PREFIX, SESSION_TTL_SECONDS } from './sessions.constants';
 
 /**
@@ -38,17 +37,6 @@ export class SessionsService {
       await this.redisService.del(this.buildSessionKey(previous));
     }
     return cookieId;
-  }
-
-  /**
-   * Returns the user body of a current User session.
-   * Null when the cookie is missing, expired, tampered with, no longer the
-   * account's current session, or not `kind: USER`.
-   */
-  async getUserSession(cookieId: string): Promise<SessionUser | null> {
-    const payload = await this.findCurrentUserSession(cookieId);
-    if (!payload) return null;
-    return this.toSessionUser(payload);
   }
 
   /**
@@ -110,17 +98,6 @@ export class SessionsService {
       credentialsSetAt: record.credentialsSetAt?.toISOString() ?? null,
       startedBy: record.startedBy,
       lastLoginAt: record.lastLoginAt?.toISOString() ?? null,
-    };
-  }
-
-  /** The user body, dropping session and JWT claims. */
-  private toSessionUser(payload: SessionPayload): SessionUser {
-    return {
-      id: payload.id,
-      email: payload.email,
-      name: payload.name,
-      avatarUrl: payload.avatarUrl,
-      role: payload.role,
     };
   }
 

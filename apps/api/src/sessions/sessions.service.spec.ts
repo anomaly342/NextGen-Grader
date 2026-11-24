@@ -118,35 +118,29 @@ describe('SessionsService', () => {
     });
   });
 
-  it('returns the user body for a current User session', async () => {
-    const inputCookieId = await service.createSession(inputRecord);
-    const actualUser = await service.getUserSession(inputCookieId);
-    expect(actualUser).toEqual(inputUser);
-  });
-
   it('returns the current User session, including Credential setup', async () => {
     const inputCookieId = await service.createSession(inputRecord);
     const actualSession = await service.findCurrentUserSession(inputCookieId);
     expect(actualSession).toMatchObject({
+      ...inputUser,
       kind: 'USER',
-      id: 1,
       credentialsSetAt: null,
       startedBy: 'GOOGLE',
-      email: inputUser.email,
+      lastLoginAt: '2026-11-01T09:00:00.000Z',
     });
   });
 
   it('returns null for an unknown cookie id', async () => {
-    const actualUser = await service.getUserSession('missing');
-    expect(actualUser).toBeNull();
+    const actualSession = await service.findCurrentUserSession('missing');
+    expect(actualSession).toBeNull();
   });
 
   it('returns null when the stored JWT was tampered with', async () => {
     const inputCookieId = await service.createSession(inputRecord);
     const key = `${SESSION_KEY_PREFIX}${inputCookieId}`;
     mockStore.set(key, `${mockStore.get(key)}x`);
-    const actualUser = await service.getUserSession(inputCookieId);
-    expect(actualUser).toBeNull();
+    const actualSession = await service.findCurrentUserSession(inputCookieId);
+    expect(actualSession).toBeNull();
   });
 
   it('ends the previous session when the same User signs in again', async () => {
@@ -156,8 +150,10 @@ describe('SessionsService', () => {
       startedBy: 'PASSWORD',
       lastLoginAt: null,
     });
-    expect(await service.getUserSession(inputFirst)).toBeNull();
-    expect(await service.getUserSession(inputSecond)).toEqual(inputUser);
+    expect(await service.findCurrentUserSession(inputFirst)).toBeNull();
+    expect(await service.findCurrentUserSession(inputSecond)).toMatchObject(
+      inputUser,
+    );
   });
 
   it('leaves another account session in place', async () => {
@@ -172,8 +168,12 @@ describe('SessionsService', () => {
       id: 2,
       user: inputOther,
     });
-    expect(await service.getUserSession(inputFirst)).toEqual(inputUser);
-    expect(await service.getUserSession(inputSecond)).toEqual(inputOther);
+    expect(await service.findCurrentUserSession(inputFirst)).toMatchObject(
+      inputUser,
+    );
+    expect(await service.findCurrentUserSession(inputSecond)).toMatchObject(
+      inputOther,
+    );
   });
 
   it('returns null for a session whose kind is EXAMINEE', async () => {
@@ -181,19 +181,21 @@ describe('SessionsService', () => {
       ...inputRecord,
       kind: 'EXAMINEE',
     });
-    expect(await service.getUserSession(inputCookieId)).toBeNull();
+    expect(await service.findCurrentUserSession(inputCookieId)).toBeNull();
   });
 
   it('does not end a User session when an Examinee session is created for the same id', async () => {
     const inputUserCookie = await service.createSession(inputRecord);
     await service.createSession({ ...inputRecord, kind: 'EXAMINEE' });
-    expect(await service.getUserSession(inputUserCookie)).toEqual(inputUser);
+    expect(await service.findCurrentUserSession(inputUserCookie)).toMatchObject(
+      inputUser,
+    );
   });
 
   it('deletes the session and its pointer on destroy', async () => {
     const inputCookieId = await service.createSession(inputRecord);
     await service.destroySession(inputCookieId);
-    expect(await service.getUserSession(inputCookieId)).toBeNull();
+    expect(await service.findCurrentUserSession(inputCookieId)).toBeNull();
     expect(mockStore.has('ngg:session:pointer:USER:1')).toBe(false);
   });
 
@@ -201,6 +203,8 @@ describe('SessionsService', () => {
     const inputFirst = await service.createSession(inputRecord);
     const inputSecond = await service.createSession(inputRecord);
     await service.destroySession(inputFirst);
-    expect(await service.getUserSession(inputSecond)).toEqual(inputUser);
+    expect(await service.findCurrentUserSession(inputSecond)).toMatchObject(
+      inputUser,
+    );
   });
 });

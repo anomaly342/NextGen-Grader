@@ -22,8 +22,10 @@ import {
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { Cookies } from '@/common/decorators/cookies.decorator';
+import { CurrentSession } from '@/common/decorators/current-session.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { SkipCredentialSetup } from '@/common/decorators/skip-credential-setup.decorator';
+import type { SessionPayload } from '@/sessions/interfaces/session-payload.interface';
 import type { SessionUser } from '@/sessions/interfaces/session-user.interface';
 import { LoginThrottlerGuard } from '@/common/guards/login-throttler.guard';
 import { SessionGuard } from '@/common/guards/session.guard';
@@ -202,14 +204,15 @@ export class AuthController {
     schema: errorSchema(AUTH_ERROR_CODE.USERNAME_TAKEN),
   })
   async setupCredentials(
-    @CurrentUser() sessionUser: SessionUser,
+    @CurrentSession() session: SessionPayload,
     @Body() body: SetupCredentialsDto,
-    @Cookies(SESSION_COOKIE_NAME) cookieId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<UserDto> {
-    const { cookieId: nextCookieId, user } =
-      await this.authService.setupCredentials(sessionUser.id, body, cookieId);
-    this.setSessionCookie(res, nextCookieId);
+    const { cookieId, user } = await this.authService.setupCredentials(
+      session,
+      body,
+    );
+    this.setSessionCookie(res, cookieId);
     return user;
   }
 
@@ -375,11 +378,10 @@ export class AuthController {
     schema: errorSchema(AUTH_ERROR_CODE.RECENT_GOOGLE_SIGN_IN_REQUIRED),
   })
   async resetPassword(
-    @CurrentUser() sessionUser: SessionUser,
-    @Cookies(SESSION_COOKIE_NAME) cookieId: string,
+    @CurrentSession() session: SessionPayload,
     @Body() body: ResetPasswordDto,
   ): Promise<void> {
-    await this.authService.resetPassword(sessionUser.id, body, cookieId);
+    await this.authService.resetPassword(session, body);
   }
 
   /** Deletes the User session and its pointer, and clears only `ngg.sid`. */

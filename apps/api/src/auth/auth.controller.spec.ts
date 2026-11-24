@@ -124,17 +124,16 @@ describe('AuthController', () => {
   });
 
   it('POST /auth/setup sets credentials and replaces ngg.sid', async () => {
+    const inputSession = { id: 1 } as never;
     const inputBody = { username: 'somchai_k', password: 'password123' };
     const actualBody = await controller.setupCredentials(
-      { id: 1 } as never,
+      inputSession,
       inputBody,
-      'old-cookie',
       mockRes as unknown as Response,
     );
     expect(mockAuth.setupCredentials).toHaveBeenCalledWith(
-      1,
+      inputSession,
       inputBody,
-      'old-cookie',
     );
     expect(mockRes.cookie).toHaveBeenCalledWith(
       'ngg.sid',

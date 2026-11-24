@@ -826,6 +826,35 @@ describe('Auth (e2e)', () => {
       const actualUser = await readBody(inputDevice.get('/api/auth/me'));
       expect(actualUser).toMatchObject({ role: 'TEACHER' });
     });
+
+    it('loads the User session once per request across guards and route handlers', async () => {
+      // Given a signed-in Google session that has finished Credential setup
+      const inputDevice = createDevice();
+      await signInWithGoogle(inputDevice, { email: STUDENT_EMAIL });
+      await setupCredentials(inputDevice, 'somchai_k').expect(200);
+      const mockFindSession = jest.spyOn(
+        e2e.app.get(SessionsService),
+        'findCurrentUserSession',
+      );
+      try {
+        // When the User hits a route checked by both guards and the service
+        await inputDevice
+          .post('/api/auth/password/reset')
+          .send({ newPassword: 'newpassword456' })
+          .expect(204);
+        // Then the session is loaded from Redis only once for that request
+        expect(mockFindSession).toHaveBeenCalledTimes(1);
+        mockFindSession.mockClear();
+        // And a regular guarded route also loads the session once
+        await inputDevice
+          .patch('/api/auth/username')
+          .send({ username: 'somchai_new' })
+          .expect(200);
+        expect(mockFindSession).toHaveBeenCalledTimes(1);
+      } finally {
+        mockFindSession.mockRestore();
+      }
+    });
   });
 
   describe('Changing the username', () => {
