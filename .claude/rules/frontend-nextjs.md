@@ -69,14 +69,16 @@ everything below; no hand-rolled validity or touched flags.
 - Every form uses TanStack Form (`@tanstack/react-form`) with shadcn fields from `packages/ui`.
 - Validation is one form-level `validators.onChange` returning `{ fields: { <name>: text | undefined } }`, so every
   change checks every field (a field-level validator only runs when its own field changes, leaving untouched fields
-  "valid"). It calls the plain rule functions in `packages/lib` (`checkUsername` → `UsernameIssue`) and maps the
-  issue code to text. The same functions back the API DTOs.
+  "valid"), one line per field. For Credentials it calls the Credential rules in `@repo/lib/auth/credential-rules`
+  (`getUsernameError`, `getPasswordError`, `getConfirmPasswordError`), which return the finished message or
+  `undefined`. The API DTOs use the same module's constants.
 - A field shows `field.state.meta.errors` under its input when
   `!meta.isValid && ((meta.isDirty && meta.isBlurred) || hasTriedSubmit)`, with
   `hasTriedSubmit = useSelector(form.store, (s) => s.submissionAttempts > 0)` (`isShowingErrors` in
   `apps/web/src/lib/field-errors.ts`). `aria-invalid`, `data-invalid` and `aria-describedby` follow the same condition.
-- A field whose rules are listed under it (`/account`, `/account/reset-password`) uses `RuleChecklist` from
-  `components/common/`: a rule turns green once met and red only under the condition above.
+- Username and new-password inputs always show the rule text (`USERNAME_RULE_TEXT`, `PASSWORD_RULE_TEXT`) in a
+  `FieldDescription` with id `<inputId>-description`, and `aria-describedby={getDescribedBy(inputId, isShowing)}`
+  lists the error first. A field shows one error with `CredentialFieldError` from `components/common/` (alert icon, bold 13px text).
 - Submit button: `<form.Subscribe selector={(s) => s.isValid && !s.isPristine}>` → `disabled={!canSubmit || isBusy}`.
 - Read form state with `useSelector`, not the deprecated `useStore`.
 - Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) goes into that
@@ -114,6 +116,6 @@ everything below; no hand-rolled validity or touched flags.
 - Pages are server components that render client components for interactive parts. Put `'use client'` on the
   smallest interactive piece.
 - Named exports. Kebab-case file and directory names (`auth-wizard/login-form.tsx`).
-- String-literal unions instead of TS `enum` (`type UsernameIssue = 'TOO_SHORT' | ...`).
+- String-literal unions instead of TS `enum` (`type SkillLevel = 'WEAK' | 'DEVELOPING' | ...`).
 - Tailwind is mobile-first: base classes for 390px, `md:` / `lg:` for wider.
 - Keep domain display logic (score text for each grading mode, level badges) in `packages/lib` with unit tests.

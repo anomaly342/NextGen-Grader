@@ -4,26 +4,25 @@ import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
   USERNAME_MAX_LENGTH,
-  USERNAME_MIN_LENGTH,
-  USERNAME_PATTERN,
-  checkUsername,
+  USERNAME_RULE_TEXT,
+  getUsernameError,
 } from '@repo/lib/auth/credential-rules';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
-import { Field, FieldError, FieldLabel } from '@repo/ui/field';
+import { Field, FieldDescription, FieldLabel } from '@repo/ui/field';
 import { Input } from '@repo/ui/input';
 import { Spinner } from '@repo/ui/spinner';
 import { useForm, useSelector } from '@tanstack/react-form';
 import { CheckIcon, CircleAlertIcon } from 'lucide-react';
 import { useRef } from 'react';
-import { RuleChecklist } from '@/components/common/rule-checklist';
+import { CredentialFieldError } from '@/components/common/credential-field-error';
 import { useChangeUsername } from '@/hooks/use-change-username';
-import { isShowingErrors } from '@/lib/field-errors';
+import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
- * The `/account` change-username form: a new username with its rules checked
- * as the User types, then "Change username". `USERNAME_TAKEN` shows under the
- * input. On success the page refreshes to show the new username and the form
+ * The `/account` change-username form: a new username with the Credential
+ * rules under it and one error at a time, then "Change username".
+ * `USERNAME_TAKEN` shows under the input. On success the page refreshes to show the new username and the form
  * says so until the User types again.
  */
 export function ChangeUsernameForm({
@@ -39,9 +38,8 @@ export function ChangeUsernameForm({
   const form = useForm({
     defaultValues: { username: '' },
     validators: {
-      // The rule checklist shows which rule fails; the value here only marks the field invalid.
       onChange: ({ value }) => ({
-        fields: { username: checkUsername(value.username) ?? undefined },
+        fields: { username: getUsernameError(value.username) },
       }),
     },
     onSubmit: ({ value }) =>
@@ -105,8 +103,6 @@ export function ChangeUsernameForm({
               field.state.meta,
               hasTriedSubmit,
             );
-            const takenError = field.state.meta.errorMap.onSubmit as
-              string | undefined;
             return (
               <Field className="gap-2" data-invalid={isShowingFieldErrors}>
                 <FieldLabel
@@ -126,43 +122,23 @@ export function ChangeUsernameForm({
                   maxLength={USERNAME_MAX_LENGTH}
                   ref={usernameInput}
                   aria-invalid={isShowingFieldErrors}
-                  aria-describedby={
-                    takenError
-                      ? 'account-username-error account-username-rules'
-                      : 'account-username-rules'
-                  }
+                  aria-describedby={getDescribedBy(
+                    'account-username',
+                    isShowingFieldErrors,
+                  )}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
                   className="h-11 px-3 font-mono text-base md:max-w-90"
                 />
-                {takenError && (
-                  <FieldError
-                    id="account-username-error"
-                    role={undefined}
-                    className="flex items-center gap-2 text-[13px] font-semibold"
-                  >
-                    <CircleAlertIcon
-                      aria-hidden
-                      className="size-3.5 shrink-0"
-                    />
-                    {takenError}
-                  </FieldError>
+                <FieldDescription id="account-username-description">
+                  {USERNAME_RULE_TEXT}
+                </FieldDescription>
+                {isShowingFieldErrors && (
+                  <CredentialFieldError id="account-username-error">
+                    {field.state.meta.errors.join(' ')}
+                  </CredentialFieldError>
                 )}
-                <RuleChecklist
-                  id="account-username-rules"
-                  isShowingErrors={isShowingFieldErrors}
-                  rules={[
-                    {
-                      label: `${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} characters`,
-                      isMet: isUsernameLengthMet(field.state.value),
-                    },
-                    {
-                      label: 'Lowercase a–z, digits 0–9 and _ only',
-                      isMet: USERNAME_PATTERN.test(field.state.value),
-                    },
-                  ]}
-                />
               </Field>
             );
           }}
@@ -206,13 +182,5 @@ export function ChangeUsernameForm({
         </div>
       </div>
     </form>
-  );
-}
-
-/** Whether `username` is within the length rule (the characters rule is checked on its own). */
-function isUsernameLengthMet(username: string): boolean {
-  return (
-    username.length >= USERNAME_MIN_LENGTH &&
-    username.length <= USERNAME_MAX_LENGTH
   );
 }

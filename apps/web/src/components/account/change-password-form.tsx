@@ -3,26 +3,25 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
-  PASSWORD_MAX_BYTES,
-  PASSWORD_MIN_LENGTH,
-  checkPassword,
-  isPasswordConfirmed,
+  PASSWORD_RULE_TEXT,
+  getConfirmPasswordError,
+  getPasswordError,
 } from '@repo/lib/auth/credential-rules';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
-import { Field, FieldError, FieldLabel } from '@repo/ui/field';
+import { Field, FieldDescription, FieldLabel } from '@repo/ui/field';
 import { Input } from '@repo/ui/input';
 import { Spinner } from '@repo/ui/spinner';
 import { useForm, useSelector } from '@tanstack/react-form';
 import { CheckIcon, CircleAlertIcon } from 'lucide-react';
 import { useRef } from 'react';
-import { RuleChecklist } from '@/components/common/rule-checklist';
+import { CredentialFieldError } from '@/components/common/credential-field-error';
 import { useChangePassword } from '@/hooks/use-change-password';
-import { isShowingErrors } from '@/lib/field-errors';
+import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
- * The `/account` change-password form: current password, new password and
- * its confirmation, with the rules checked as the User types. A wrong current
+ * The `/account` change-password form: current password, new password with
+ * the Credential rules under it, and its confirmation, one error per field. A wrong current
  * password shows under that input and changes nothing. On success the form
  * clears and says so until the User types again; this session stays signed in.
  */
@@ -43,23 +42,16 @@ export function ChangePasswordForm({
       confirmPassword: '',
     },
     validators: {
-      // A field left out of `fields` has no error. New password and confirmation
-      // show which rule fails in their checklists; their values here only mark
-      // the fields invalid.
-      onChange: ({ value }) => {
-        const fields: Partial<Record<keyof typeof value, string>> = {};
-        if (value.currentPassword === '') {
-          fields.currentPassword = 'Enter your current password.';
-        }
-        const newPasswordIssue = checkPassword(value.newPassword);
-        if (newPasswordIssue) {
-          fields.newPassword = newPasswordIssue;
-        }
-        if (!isPasswordConfirmed(value.confirmPassword, value.newPassword)) {
-          fields.confirmPassword = 'MISMATCH';
-        }
-        return { fields };
-      },
+      onChange: ({ value }) => ({
+        fields: {
+          currentPassword: getCurrentPasswordError(value.currentPassword),
+          newPassword: getPasswordError(value.newPassword),
+          confirmPassword: getConfirmPasswordError(
+            value.confirmPassword,
+            value.newPassword,
+          ),
+        },
+      }),
     },
     onSubmit: ({ value }) =>
       changePassword(
@@ -154,17 +146,9 @@ export function ChangePasswordForm({
                   className="h-11 px-3 text-base md:max-w-90"
                 />
                 {isShowingFieldErrors && (
-                  <FieldError
-                    id="account-current-password-error"
-                    role={undefined}
-                    className="flex items-center gap-2 text-[13px] font-semibold"
-                  >
-                    <CircleAlertIcon
-                      aria-hidden
-                      className="size-3.5 shrink-0"
-                    />
+                  <CredentialFieldError id="account-current-password-error">
                     {field.state.meta.errors.join(' ')}
-                  </FieldError>
+                  </CredentialFieldError>
                 )}
               </Field>
             );
@@ -191,22 +175,23 @@ export function ChangePasswordForm({
                   type="password"
                   autoComplete="new-password"
                   aria-invalid={isShowingFieldErrors}
-                  aria-describedby="account-new-password-rules"
+                  aria-describedby={getDescribedBy(
+                    'account-new-password',
+                    isShowingFieldErrors,
+                  )}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
                   className="h-11 px-3 text-base md:max-w-90"
                 />
-                <RuleChecklist
-                  id="account-new-password-rules"
-                  isShowingErrors={isShowingFieldErrors}
-                  rules={[
-                    {
-                      label: `At least ${PASSWORD_MIN_LENGTH} characters, at most ${PASSWORD_MAX_BYTES} bytes (a Thai letter is 3)`,
-                      isMet: checkPassword(field.state.value) === null,
-                    },
-                  ]}
-                />
+                <FieldDescription id="account-new-password-description">
+                  {PASSWORD_RULE_TEXT}
+                </FieldDescription>
+                {isShowingFieldErrors && (
+                  <CredentialFieldError id="account-new-password-error">
+                    {field.state.meta.errors.join(' ')}
+                  </CredentialFieldError>
+                )}
               </Field>
             );
           }}
@@ -233,29 +218,21 @@ export function ChangePasswordForm({
                   autoComplete="new-password"
                   enterKeyHint="done"
                   aria-invalid={isShowingFieldErrors}
-                  aria-describedby="account-confirm-password-rules"
+                  aria-describedby={
+                    isShowingFieldErrors
+                      ? 'account-confirm-password-error'
+                      : undefined
+                  }
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
                   className="h-11 px-3 text-base md:max-w-90"
                 />
-                <form.Subscribe selector={(state) => state.values.newPassword}>
-                  {(newPassword) => (
-                    <RuleChecklist
-                      id="account-confirm-password-rules"
-                      isShowingErrors={isShowingFieldErrors}
-                      rules={[
-                        {
-                          label: 'Matches the new password',
-                          isMet: isPasswordConfirmed(
-                            field.state.value,
-                            newPassword,
-                          ),
-                        },
-                      ]}
-                    />
-                  )}
-                </form.Subscribe>
+                {isShowingFieldErrors && (
+                  <CredentialFieldError id="account-confirm-password-error">
+                    {field.state.meta.errors.join(' ')}
+                  </CredentialFieldError>
+                )}
               </Field>
             );
           }}
@@ -304,3 +281,12 @@ export function ChangePasswordForm({
 
 /** Shown under the current password for `INVALID_CREDENTIALS`; the shared map's text speaks of a username. */
 const WRONG_CURRENT_PASSWORD_MESSAGE = 'Current password is wrong.';
+
+/**
+ * The current password's error while it is empty. Not a Credential rule: it
+ * proves who the User is, so it stays with this form.
+ */
+function getCurrentPasswordError(currentPassword: string): string | undefined {
+  if (currentPassword === '') return 'Enter your current password.';
+  return undefined;
+}

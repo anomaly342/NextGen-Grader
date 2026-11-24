@@ -3,15 +3,14 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
-  PASSWORD_MAX_BYTES,
-  PASSWORD_MIN_LENGTH,
-  checkPassword,
-  isPasswordConfirmed,
+  PASSWORD_RULE_TEXT,
+  getConfirmPasswordError,
+  getPasswordError,
 } from '@repo/lib/auth/credential-rules';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
 import { Card, CardContent } from '@repo/ui/card';
-import { Field, FieldLabel } from '@repo/ui/field';
+import { Field, FieldDescription, FieldLabel } from '@repo/ui/field';
 import { Input } from '@repo/ui/input';
 import { Spinner } from '@repo/ui/spinner';
 import { useForm, useSelector } from '@tanstack/react-form';
@@ -23,15 +22,15 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { RuleChecklist } from '@/components/common/rule-checklist';
+import { CredentialFieldError } from '@/components/common/credential-field-error';
 import { GoogleIcon } from '@/components/login/google-icon';
 import { useGoogleLogin } from '@/hooks/use-google-login';
 import { useResetPassword } from '@/hooks/use-reset-password';
-import { isShowingErrors } from '@/lib/field-errors';
+import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
- * The `/account/reset-password` card (Password reset): a new password and its
- * confirmation. After success it says the password changed. When the API
+ * The `/account/reset-password` card (Password reset): a new password with the
+ * Credential rules under it, and its confirmation, one error per field. After success it says the password changed. When the API
  * answers `RECENT_GOOGLE_SIGN_IN_REQUIRED` (the 10 minutes after the Google
  * sign-in have passed) it offers signing in with Google again, which comes
  * back here.
@@ -44,19 +43,15 @@ export function ResetPasswordCard() {
   const form = useForm({
     defaultValues: { newPassword: '', confirmPassword: '' },
     validators: {
-      // A field left out of `fields` has no error. The rule checklists show which
-      // rule fails; the values here only mark the fields invalid.
-      onChange: ({ value }) => {
-        const fields: Partial<Record<keyof typeof value, string>> = {};
-        const newPasswordIssue = checkPassword(value.newPassword);
-        if (newPasswordIssue) {
-          fields.newPassword = newPasswordIssue;
-        }
-        if (!isPasswordConfirmed(value.confirmPassword, value.newPassword)) {
-          fields.confirmPassword = 'MISMATCH';
-        }
-        return { fields };
-      },
+      onChange: ({ value }) => ({
+        fields: {
+          newPassword: getPasswordError(value.newPassword),
+          confirmPassword: getConfirmPasswordError(
+            value.confirmPassword,
+            value.newPassword,
+          ),
+        },
+      }),
     },
     onSubmit: ({ value }) => resetPassword(value.newPassword),
   });
@@ -168,22 +163,23 @@ export function ResetPasswordCard() {
                     type="password"
                     autoComplete="new-password"
                     aria-invalid={isShowingFieldErrors}
-                    aria-describedby="reset-new-password-rules"
+                    aria-describedby={getDescribedBy(
+                      'reset-new-password',
+                      isShowingFieldErrors,
+                    )}
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                     className="h-11 px-3 text-base"
                   />
-                  <RuleChecklist
-                    id="reset-new-password-rules"
-                    isShowingErrors={isShowingFieldErrors}
-                    rules={[
-                      {
-                        label: `At least ${PASSWORD_MIN_LENGTH} characters, at most ${PASSWORD_MAX_BYTES} bytes (a Thai letter is 3)`,
-                        isMet: checkPassword(field.state.value) === null,
-                      },
-                    ]}
-                  />
+                  <FieldDescription id="reset-new-password-description">
+                    {PASSWORD_RULE_TEXT}
+                  </FieldDescription>
+                  {isShowingFieldErrors && (
+                    <CredentialFieldError id="reset-new-password-error">
+                      {field.state.meta.errors.join(' ')}
+                    </CredentialFieldError>
+                  )}
                 </Field>
               );
             }}
@@ -210,31 +206,21 @@ export function ResetPasswordCard() {
                     autoComplete="new-password"
                     enterKeyHint="done"
                     aria-invalid={isShowingFieldErrors}
-                    aria-describedby="reset-confirm-password-rules"
+                    aria-describedby={
+                      isShowingFieldErrors
+                        ? 'reset-confirm-password-error'
+                        : undefined
+                    }
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                     className="h-11 px-3 text-base"
                   />
-                  <form.Subscribe
-                    selector={(state) => state.values.newPassword}
-                  >
-                    {(newPassword) => (
-                      <RuleChecklist
-                        id="reset-confirm-password-rules"
-                        isShowingErrors={isShowingFieldErrors}
-                        rules={[
-                          {
-                            label: 'Matches the new password',
-                            isMet: isPasswordConfirmed(
-                              field.state.value,
-                              newPassword,
-                            ),
-                          },
-                        ]}
-                      />
-                    )}
-                  </form.Subscribe>
+                  {isShowingFieldErrors && (
+                    <CredentialFieldError id="reset-confirm-password-error">
+                      {field.state.meta.errors.join(' ')}
+                    </CredentialFieldError>
+                  )}
                 </Field>
               );
             }}

@@ -3,14 +3,12 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
-  PASSWORD_MAX_BYTES,
-  PASSWORD_MIN_LENGTH,
+  PASSWORD_RULE_TEXT,
   USERNAME_MAX_LENGTH,
-  USERNAME_MIN_LENGTH,
-  checkPassword,
-  checkUsername,
-  type PasswordIssue,
-  type UsernameIssue,
+  USERNAME_RULE_TEXT,
+  getConfirmPasswordError,
+  getPasswordError,
+  getUsernameError,
 } from '@repo/lib/auth/credential-rules';
 import { getInitials } from '@repo/lib/user/initials';
 import type { ModelRow } from '@repo/prisma';
@@ -21,7 +19,6 @@ import { Card, CardContent } from '@repo/ui/card';
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldGroup,
   FieldLabel,
 } from '@repo/ui/field';
@@ -31,9 +28,10 @@ import { Spinner } from '@repo/ui/spinner';
 import { useForm, useSelector } from '@tanstack/react-form';
 import { CircleAlertIcon } from 'lucide-react';
 import { useRef } from 'react';
+import { CredentialFieldError } from '@/components/common/credential-field-error';
 import { useFinishSetup } from '@/hooks/use-finish-setup';
 import { useLogout } from '@/hooks/use-logout';
-import { isShowingErrors } from '@/lib/field-errors';
+import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
  * The `/setup` card (Credential setup): the signed-in University account with
@@ -60,25 +58,16 @@ export function SetupCard({
     validators: {
       // Form-level, so every change checks every field: canSubmit then covers
       // fields the User has not typed in yet, not only the one that changed.
-      onChange: ({ value }) => {
-        const usernameIssue = checkUsername(value.username);
-        const passwordIssue = checkPassword(value.password);
-        return {
-          fields: {
-            username: usernameIssue
-              ? USERNAME_ISSUE_MESSAGES[usernameIssue]
-              : undefined,
-            password: passwordIssue
-              ? PASSWORD_ISSUE_MESSAGES[passwordIssue]
-              : undefined,
-            // Checked here only: the API never sees the confirmation.
-            confirmPassword: getConfirmPasswordError(
-              value.confirmPassword,
-              value.password,
-            ),
-          },
-        };
-      },
+      onChange: ({ value }) => ({
+        fields: {
+          username: getUsernameError(value.username),
+          password: getPasswordError(value.password),
+          confirmPassword: getConfirmPasswordError(
+            value.confirmPassword,
+            value.password,
+          ),
+        },
+      }),
     },
     onSubmit: ({ value }) =>
       finishSetup(
@@ -215,13 +204,12 @@ export function SetupCard({
                     className="h-11 px-3 font-mono text-base"
                   />
                   <FieldDescription id="setup-username-description">
-                    {USERNAME_MIN_LENGTH}–{USERNAME_MAX_LENGTH} characters:
-                    lowercase a–z, digits 0–9 and _.
+                    {USERNAME_RULE_TEXT}
                   </FieldDescription>
                   {isShowingErrors(field.state.meta, hasTriedSubmit) && (
-                    <FieldError id="setup-username-error" role={undefined}>
+                    <CredentialFieldError id="setup-username-error">
                       {field.state.meta.errors.join(' ')}
-                    </FieldError>
+                    </CredentialFieldError>
                   )}
                 </Field>
               )}
@@ -261,13 +249,12 @@ export function SetupCard({
                     className="h-11 px-3 text-base"
                   />
                   <FieldDescription id="setup-password-description">
-                    At least {PASSWORD_MIN_LENGTH} characters, at most{' '}
-                    {PASSWORD_MAX_BYTES} bytes (a Thai letter is 3).
+                    {PASSWORD_RULE_TEXT}
                   </FieldDescription>
                   {isShowingErrors(field.state.meta, hasTriedSubmit) && (
-                    <FieldError id="setup-password-error" role={undefined}>
+                    <CredentialFieldError id="setup-password-error">
                       {field.state.meta.errors.join(' ')}
-                    </FieldError>
+                    </CredentialFieldError>
                   )}
                 </Field>
               )}
@@ -306,9 +293,9 @@ export function SetupCard({
                     className="h-11 px-3 text-base"
                   />
                   {isShowingErrors(field.state.meta, hasTriedSubmit) && (
-                    <FieldError id="setup-confirm-error" role={undefined}>
+                    <CredentialFieldError id="setup-confirm-error">
                       {field.state.meta.errors.join(' ')}
-                    </FieldError>
+                    </CredentialFieldError>
                   )}
                 </Field>
               )}
@@ -335,35 +322,4 @@ export function SetupCard({
       </CardContent>
     </Card>
   );
-}
-
-/** Error text for each username rule. */
-const USERNAME_ISSUE_MESSAGES: Readonly<Record<UsernameIssue, string>> = {
-  TOO_SHORT: `Use at least ${USERNAME_MIN_LENGTH} characters.`,
-  TOO_LONG: `Use at most ${USERNAME_MAX_LENGTH} characters.`,
-  INVALID_CHARACTERS: 'Use only lowercase a–z, digits 0–9 and _.',
-};
-
-/** Error text for each password rule. */
-const PASSWORD_ISSUE_MESSAGES: Readonly<Record<PasswordIssue, string>> = {
-  TOO_SHORT: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
-  TOO_LONG: `Use at most ${PASSWORD_MAX_BYTES} bytes (a Thai letter is 3).`,
-};
-
-/** Error text for the confirmation: empty, or not the same as the password. */
-function getConfirmPasswordError(
-  confirmPassword: string,
-  password: string,
-): string | undefined {
-  if (confirmPassword === '') return 'Type the password again.';
-  return confirmPassword === password
-    ? undefined
-    : 'Does not match the password.';
-}
-
-/** `aria-describedby` for an input with a rules description: the error first when there is one. */
-function getDescribedBy(inputId: string, hasError: boolean): string {
-  return hasError
-    ? `${inputId}-error ${inputId}-description`
-    : `${inputId}-description`;
 }

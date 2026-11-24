@@ -17,3 +17,16 @@ export function isShowingErrors(
 ): boolean {
   return !meta.isValid && ((meta.isDirty && meta.isBlurred) || hasTriedSubmit);
 }
+
+/**
+ * `aria-describedby` for an input with rule text under it (`<inputId>-description`):
+ * the error (`<inputId>-error`) first while it shows, so it is read before the rules.
+ */
+export function getDescribedBy(
+  inputId: string,
+  isShowingError: boolean,
+): string {
+  return isShowingError
+    ? `${inputId}-error ${inputId}-description`
+    : `${inputId}-description`;
+}

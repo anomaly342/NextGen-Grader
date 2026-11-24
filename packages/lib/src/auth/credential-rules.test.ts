@@ -1,73 +1,82 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  checkPassword,
-  checkUsername,
-  isPasswordConfirmed,
+  getConfirmPasswordError,
+  getPasswordError,
+  getUsernameError,
 } from './credential-rules.ts';
 
-describe('checkUsername', () => {
+describe('getUsernameError', () => {
   test('accepts 4–20 lowercase letters, digits and underscores', () => {
-    expect(checkUsername('somchai_k')).toBeNull();
-    expect(checkUsername('ab_1')).toBeNull();
-    expect(checkUsername('a'.repeat(20))).toBeNull();
+    expect(getUsernameError('somchai_k')).toBeUndefined();
+    expect(getUsernameError('ab_1')).toBeUndefined();
+    expect(getUsernameError('a'.repeat(20))).toBeUndefined();
   });
 
   test('rejects fewer than 4 characters', () => {
-    expect(checkUsername('abc')).toBe('TOO_SHORT');
-    expect(checkUsername('')).toBe('TOO_SHORT');
+    expect(getUsernameError('abc')).toBe('Use at least 4 characters.');
+    expect(getUsernameError('')).toBe('Use at least 4 characters.');
   });
 
   test('rejects more than 20 characters', () => {
-    expect(checkUsername('a'.repeat(21))).toBe('TOO_LONG');
+    expect(getUsernameError('a'.repeat(21))).toBe('Use at most 20 characters.');
   });
 
   test('rejects capitals, spaces and other symbols', () => {
-    expect(checkUsername('Somchai')).toBe('INVALID_CHARACTERS');
-    expect(checkUsername('som chai')).toBe('INVALID_CHARACTERS');
-    expect(checkUsername('som-chai')).toBe('INVALID_CHARACTERS');
-    expect(checkUsername('สมชาย_k')).toBe('INVALID_CHARACTERS');
+    const message = 'Use only lowercase a–z, digits 0–9 and _.';
+    expect(getUsernameError('Somchai')).toBe(message);
+    expect(getUsernameError('som chai')).toBe(message);
+    expect(getUsernameError('som-chai')).toBe(message);
+    expect(getUsernameError('สมชาย_k')).toBe(message);
   });
 });
 
-describe('checkPassword', () => {
+describe('getPasswordError', () => {
+  const tooShort = 'Use at least 8 characters.';
+  const tooLong = 'Use at most 72 bytes (a Thai letter is 3).';
+
   test('accepts 8–72 characters of anything', () => {
-    expect(checkPassword('12345678')).toBeNull();
-    expect(checkPassword('correct horse battery staple')).toBeNull();
-    expect(checkPassword('x'.repeat(72))).toBeNull();
+    expect(getPasswordError('12345678')).toBeUndefined();
+    expect(getPasswordError('correct horse battery staple')).toBeUndefined();
+    expect(getPasswordError('x'.repeat(72))).toBeUndefined();
   });
 
   test('rejects fewer than 8 characters', () => {
-    expect(checkPassword('1234567')).toBe('TOO_SHORT');
+    expect(getPasswordError('1234567')).toBe(tooShort);
   });
 
   test('rejects more than 72 characters', () => {
-    expect(checkPassword('x'.repeat(73))).toBe('TOO_LONG');
+    expect(getPasswordError('x'.repeat(73))).toBe(tooLong);
   });
 
   test('counts the maximum in UTF-8 bytes, the part bcrypt keeps', () => {
     // A Thai letter is 3 bytes: 24 letters are 72 bytes, 25 are 75.
-    expect(checkPassword('ก'.repeat(24))).toBeNull();
-    expect(checkPassword('ก'.repeat(25))).toBe('TOO_LONG');
-    expect(checkPassword(`${'x'.repeat(70)}ก`)).toBe('TOO_LONG');
+    expect(getPasswordError('ก'.repeat(24))).toBeUndefined();
+    expect(getPasswordError('ก'.repeat(25))).toBe(tooLong);
+    expect(getPasswordError(`${'x'.repeat(70)}ก`)).toBe(tooLong);
   });
 
   test('counts the minimum in characters, not bytes', () => {
-    expect(checkPassword('ก'.repeat(7))).toBe('TOO_SHORT');
-    expect(checkPassword('ก'.repeat(8))).toBeNull();
+    expect(getPasswordError('ก'.repeat(7))).toBe(tooShort);
+    expect(getPasswordError('ก'.repeat(8))).toBeUndefined();
   });
 });
 
-describe('isPasswordConfirmed', () => {
+describe('getConfirmPasswordError', () => {
   test('accepts a confirmation equal to the password', () => {
-    expect(isPasswordConfirmed('labpass2027', 'labpass2027')).toBe(true);
+    expect(
+      getConfirmPasswordError('labpass2027', 'labpass2027'),
+    ).toBeUndefined();
   });
 
   test('rejects a different confirmation, case included', () => {
-    expect(isPasswordConfirmed('labpass2072', 'labpass2027')).toBe(false);
-    expect(isPasswordConfirmed('Labpass2027', 'labpass2027')).toBe(false);
+    const message = 'Does not match the password.';
+    expect(getConfirmPasswordError('labpass2072', 'labpass2027')).toBe(message);
+    expect(getConfirmPasswordError('Labpass2027', 'labpass2027')).toBe(message);
   });
 
   test('rejects an empty confirmation, even of an empty password', () => {
-    expect(isPasswordConfirmed('', '')).toBe(false);
+    const message = 'Type the password again.';
+    expect(getConfirmPasswordError('', 'labpass2027')).toBe(message);
+    expect(getConfirmPasswordError('', '')).toBe(message);
   });
 });
