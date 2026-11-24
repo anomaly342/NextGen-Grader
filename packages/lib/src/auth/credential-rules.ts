@@ -9,9 +9,14 @@ export const USERNAME_MIN_LENGTH = 4;
 export const USERNAME_MAX_LENGTH = 20;
 export const USERNAME_PATTERN = /^[a-z0-9_]+$/;
 
-/** Password length. bcrypt ignores everything past 72 bytes, so longer is refused. */
+/** Password minimum, in characters. */
 export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_MAX_LENGTH = 72;
+
+/**
+ * Password maximum, in UTF-8 bytes: bcrypt ignores everything past 72 bytes,
+ * so longer is refused. A Thai letter is 3 bytes, so 24 of them hit it.
+ */
+export const PASSWORD_MAX_BYTES = 72;
 
 /** Why a username breaks the rules. */
 export type UsernameIssue = 'TOO_SHORT' | 'TOO_LONG' | 'INVALID_CHARACTERS';
@@ -30,7 +35,9 @@ export function checkUsername(username: string): UsernameIssue | null {
 /** The first rule `password` breaks, or null when it follows them all. */
 export function checkPassword(password: string): PasswordIssue | null {
   if (password.length < PASSWORD_MIN_LENGTH) return 'TOO_SHORT';
-  if (password.length > PASSWORD_MAX_LENGTH) return 'TOO_LONG';
+  if (new TextEncoder().encode(password).length > PASSWORD_MAX_BYTES) {
+    return 'TOO_LONG';
+  }
   return null;
 }
 

@@ -385,6 +385,22 @@ describe('Auth (e2e)', () => {
       // Then it is refused
       await setupCredentials(inputDevice, 'Somchai_K').expect(400);
     });
+
+    it('400 for a password over 72 UTF-8 bytes, even when under 72 characters', async () => {
+      // Given a User signed in with Google who has not finished Credential setup
+      const inputDevice = createDevice();
+      await signInWithGoogle(inputDevice, { email: STUDENT_EMAIL });
+      // When they choose 25 Thai letters: 25 characters but 75 bytes, past what bcrypt keeps
+      // Then it is refused, and 24 Thai letters (72 bytes) still work
+      await inputDevice
+        .post('/api/auth/setup')
+        .send({ username: 'somchai_k', password: 'ก'.repeat(25) })
+        .expect(400);
+      await inputDevice
+        .post('/api/auth/setup')
+        .send({ username: 'somchai_k', password: 'ก'.repeat(24) })
+        .expect(200);
+    });
   });
 
   describe('Credential setup gate', () => {

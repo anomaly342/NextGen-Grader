@@ -3,7 +3,7 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
-  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_BYTES,
   PASSWORD_MIN_LENGTH,
   checkPassword,
   isPasswordConfirmed,
@@ -202,7 +202,7 @@ export function ChangePasswordForm({
                   isShowingErrors={isShowingFieldErrors}
                   rules={[
                     {
-                      label: `${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters`,
+                      label: `At least ${PASSWORD_MIN_LENGTH} characters, at most ${PASSWORD_MAX_BYTES} bytes (a Thai letter is 3)`,
                       isMet: checkPassword(field.state.value) === null,
                     },
                   ]}

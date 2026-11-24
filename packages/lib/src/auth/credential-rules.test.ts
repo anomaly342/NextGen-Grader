@@ -43,6 +43,18 @@ describe('checkPassword', () => {
   test('rejects more than 72 characters', () => {
     expect(checkPassword('x'.repeat(73))).toBe('TOO_LONG');
   });
+
+  test('counts the maximum in UTF-8 bytes, the part bcrypt keeps', () => {
+    // A Thai letter is 3 bytes: 24 letters are 72 bytes, 25 are 75.
+    expect(checkPassword('ก'.repeat(24))).toBeNull();
+    expect(checkPassword('ก'.repeat(25))).toBe('TOO_LONG');
+    expect(checkPassword(`${'x'.repeat(70)}ก`)).toBe('TOO_LONG');
+  });
+
+  test('counts the minimum in characters, not bytes', () => {
+    expect(checkPassword('ก'.repeat(7))).toBe('TOO_SHORT');
+    expect(checkPassword('ก'.repeat(8))).toBeNull();
+  });
 });
 
 describe('isPasswordConfirmed', () => {

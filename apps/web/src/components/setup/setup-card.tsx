@@ -3,7 +3,7 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
-  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_BYTES,
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
@@ -261,7 +261,8 @@ export function SetupCard({
                     className="h-11 px-3 text-base"
                   />
                   <FieldDescription id="setup-password-description">
-                    {PASSWORD_MIN_LENGTH}–{PASSWORD_MAX_LENGTH} characters.
+                    At least {PASSWORD_MIN_LENGTH} characters, at most{' '}
+                    {PASSWORD_MAX_BYTES} bytes (a Thai letter is 3).
                   </FieldDescription>
                   {isShowingErrors(field.state.meta, hasTriedSubmit) && (
                     <FieldError id="setup-password-error" role={undefined}>
@@ -346,7 +347,7 @@ const USERNAME_ISSUE_MESSAGES: Readonly<Record<UsernameIssue, string>> = {
 /** Error text for each password rule. */
 const PASSWORD_ISSUE_MESSAGES: Readonly<Record<PasswordIssue, string>> = {
   TOO_SHORT: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
-  TOO_LONG: `Use at most ${PASSWORD_MAX_LENGTH} characters.`,
+  TOO_LONG: `Use at most ${PASSWORD_MAX_BYTES} bytes (a Thai letter is 3).`,
 };
 
 /** Error text for the confirmation: empty, or not the same as the password. */
