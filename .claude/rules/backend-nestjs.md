@@ -17,7 +17,7 @@ marked _(checked)_. Style rules applied at review time live in `CODING_STANDARDS
   `decorator`, `filter`, `pipe`, `middleware`, `dto`, `interface`, `constants`, `util`, `setup`, plus `.spec.ts` next to
   the file it tests and `.e2e-spec.ts` in `test/`.
 - Every type named `…Dto` goes in `dto/` as `.dto.ts` _(checked)_: request bodies are class-validator classes
-  (`LoginDto`), responses and their row shapes too (`UserDto`, `UserDtoRow`).
+  (`LoginDto`), responses and their row shapes too. A shape that both apps use (`User`) lives in `@repo/prisma` instead.
 - Every other data type, `type` aliases included, goes in `interfaces/` as `.interface.ts` _(checked)_.
 - One export per file; only `.constants.ts` may export several _(checked)_.
 - `src/common/` holds shared code, one folder per kind: `guards/`, `decorators/`, `middleware/`, `swagger/`, `utils/`.

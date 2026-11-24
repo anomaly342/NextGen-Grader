@@ -1,4 +1,5 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
+import type { User } from '@repo/prisma';
 import {
   Body,
   Controller,
@@ -52,7 +53,6 @@ import { CheckUsernameDto } from './dto/check-username.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
-import type { UserDto } from './dto/user.dto';
 import type { GoogleAuthUrl } from './interfaces/google-auth-url.interface';
 import type { GoogleCallbackErrorCode } from './interfaces/google-callback-error-code.interface';
 import type { OAuthState } from './interfaces/oauth-state.interface';
@@ -207,7 +207,7 @@ export class AuthController {
     @CurrentSession() session: SessionPayload,
     @Body() body: SetupCredentialsDto,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<UserDto> {
+  ): Promise<User> {
     const { cookieId, user } = await this.authService.setupCredentials(
       session,
       body,
@@ -240,7 +240,7 @@ export class AuthController {
   async loginWithPassword(
     @Body() body: LoginDto,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<UserDto> {
+  ): Promise<User> {
     const { cookieId, user } = await this.authService.loginWithPassword(body);
     this.setSessionCookie(res, cookieId);
     return user;
@@ -262,7 +262,7 @@ export class AuthController {
     description: 'Not signed in, or `ngg.sid` is not a current User session.',
     schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
-  getMe(@CurrentUser() sessionUser: SessionUser): Promise<UserDto> {
+  getMe(@CurrentUser() sessionUser: SessionUser): Promise<User> {
     return this.authService.getMe(sessionUser);
   }
 
@@ -323,7 +323,7 @@ export class AuthController {
   changeUsername(
     @CurrentUser() sessionUser: SessionUser,
     @Body() body: ChangeUsernameDto,
-  ): Promise<UserDto> {
+  ): Promise<User> {
     return this.authService.changeUsername(sessionUser, body);
   }
 

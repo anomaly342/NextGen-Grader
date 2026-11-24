@@ -31,7 +31,7 @@ describe('AuthService', () => {
     credentialsSetAt: new Date(),
     passwordHash: '$2b$12$hash',
   };
-  const expectedUserDto = {
+  const expectedUser = {
     id: 1,
     email: inputPayload.email,
     name: inputPayload.name,
@@ -232,14 +232,14 @@ describe('AuthService', () => {
 
     it('stores only the bcrypt hash and replaces the session with setup done', async () => {
       // select() drops passwordHash; the mock ignores select, so stub the row it would return.
-      mockUser.update.mockResolvedValue(expectedUserDto);
+      mockUser.update.mockResolvedValue(expectedUser);
       const actualResult = await service.setupCredentials(
         inputSession,
         inputBody,
       );
       expect(actualResult).toEqual({
         cookieId: 'cookie-id',
-        user: expectedUserDto,
+        user: expectedUser,
       });
       expect(mockBcrypt.hash).toHaveBeenCalledWith('password123');
       expect(mockUser.update).toHaveBeenCalledWith(
@@ -307,7 +307,7 @@ describe('AuthService', () => {
       const actualResult = await service.loginWithPassword(inputBody);
       expect(actualResult).toEqual({
         cookieId: 'cookie-id',
-        user: expectedUserDto,
+        user: expectedUser,
       });
       expect(mockUser.where).toHaveBeenCalledWith({ username: 'Somchai_K' });
       expect(mockCreateSession).toHaveBeenCalledWith(
@@ -361,7 +361,7 @@ describe('AuthService', () => {
         credentialsSetAt: inputUserRow.credentialsSetAt,
       });
       const actualUser = await service.getMe(inputSessionUser);
-      expect(actualUser).toEqual(expectedUserDto);
+      expect(actualUser).toEqual(expectedUser);
     });
 
     it('401 NOT_SIGNED_IN when the User row is gone', async () => {
@@ -386,7 +386,7 @@ describe('AuthService', () => {
         username: 'somchai_new',
       });
       expect(actualUser).toEqual({
-        ...expectedUserDto,
+        ...expectedUser,
         username: 'somchai_new',
       });
       expect(mockUser.where).toHaveBeenCalledWith({ id: 1 });

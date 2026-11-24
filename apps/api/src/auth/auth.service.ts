@@ -1,4 +1,5 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
+import type { User } from '@repo/prisma';
 import {
   ConflictException,
   ForbiddenException,
@@ -29,8 +30,6 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
 import { GoogleProfile } from './interfaces/google-profile.interface';
 import { LoginResult } from './interfaces/login-result.interface';
-import { UserDto } from './dto/user.dto';
-import { UserDtoRow } from './dto/user-dto-row.dto';
 
 /** Sign-in, Credential setup, username change, and password change or reset. */
 @Injectable()
@@ -135,12 +134,12 @@ export class AuthService {
    * The signed-in User. Display name, email, avatar and Role come from the
    * session. Username and credentialsSetAt come from the database.
    */
-  async getMe(sessionUser: SessionUser): Promise<UserDto> {
+  async getMe(sessionUser: SessionUser): Promise<User> {
     const row = await this.prismaService.User.where({ id: sessionUser.id })
       .select('username', 'credentialsSetAt')
       .first();
     if (!row) throw this.createNotSignedInError();
-    return this.toUserDto(sessionUser, row);
+    return this.toUser(sessionUser, row);
   }
 
   /** Throws 409 USERNAME_TAKEN when another User already has `username` (exact match). */
@@ -159,17 +158,17 @@ export class AuthService {
   async changeUsername(
     sessionUser: SessionUser,
     { username }: ChangeUsernameDto,
-  ): Promise<UserDto> {
+  ): Promise<User> {
     const row = await this.renameUser(sessionUser.id, username);
     if (!row) throw this.createNotSignedInError();
-    return this.toUserDto(sessionUser, row);
+    return this.toUser(sessionUser, row);
   }
 
   /** Writes the new username; null if the User row is gone. A taken username is 409. */
   private async renameUser(
     userId: number,
     username: string,
-  ): Promise<Pick<UserDto, 'username' | 'credentialsSetAt'> | null> {
+  ): Promise<Pick<User, 'username' | 'credentialsSetAt'> | null> {
     try {
       return await this.prismaService.User.where({ id: userId })
         .select('username', 'credentialsSetAt')
@@ -255,7 +254,7 @@ export class AuthService {
     userId: number,
     username: string,
     passwordHash: string,
-  ): Promise<UserDtoRow | null> {
+  ): Promise<User | null> {
     try {
       return await this.prismaService.User.where({ id: userId })
         .where((user) => user.credentialsSetAt.isNull())
@@ -299,10 +298,10 @@ export class AuthService {
    * The User as the API returns it: profile and Role from the session,
    * username and credentialsSetAt from the database row.
    */
-  private toUserDto(
+  private toUser(
     sessionUser: SessionUser,
-    row: Pick<UserDto, 'username' | 'credentialsSetAt'>,
-  ): UserDto {
+    row: Pick<User, 'username' | 'credentialsSetAt'>,
+  ): User {
     return {
       id: sessionUser.id,
       email: sessionUser.email,
@@ -357,7 +356,7 @@ export class AuthService {
   }
 
   /** Creates the user on first login, otherwise refreshes their profile and last login. */
-  private async upsertUser(profile: GoogleProfile): Promise<UserDtoRow> {
+  private async upsertUser(profile: GoogleProfile): Promise<User> {
     const lastLoginAt = this.clockService.now();
     return this.prismaService.User.select(
       'id',
@@ -399,7 +398,7 @@ export class AuthService {
 
   /** Opens a User session, ending whatever session this User had. */
   private openUserSession(
-    user: UserDtoRow,
+    user: User,
     startedBy: SessionRecord['startedBy'],
     lastLoginAt: Date | null,
   ): Promise<string> {
@@ -414,7 +413,7 @@ export class AuthService {
   }
 
   /** The user body stored in the session JWT. */
-  private toSessionUser(row: UserDtoRow): SessionUser {
+  private toSessionUser(row: User): SessionUser {
     return {
       id: row.id,
       email: row.email,
