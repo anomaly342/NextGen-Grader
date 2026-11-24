@@ -2,35 +2,40 @@
 
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
-import {
-  USERNAME_MAX_LENGTH,
-  USERNAME_RULE_TEXT,
-  getUsernameError,
-} from '@repo/lib/auth/credential-rules';
+import { getUsernameError } from '@repo/lib/auth/credential-rules';
+import type { ModelRow } from '@repo/prisma';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
 import { Spinner } from '@repo/ui/spinner';
 import { CheckIcon, CircleAlertIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   setSubmitError,
   useCredentialForm,
 } from '@/components/common/form/credential-form';
+import { UsernameField } from '@/components/common/form/username-field';
 import { useChangeUsername } from '@/hooks/use-change-username';
+import { useCheckUsername } from '@/hooks/use-check-username';
 
 /**
  * The `/account` change-username form: a new username with the Credential
- * rules under it and one error at a time, then "Change username".
- * `USERNAME_TAKEN` shows under the input. On success the page refreshes to show the new username and the form
- * says so until the User types again.
+ * rules under it, live availability check, and one error at a time, then
+ * "Change username". `USERNAME_TAKEN` shows under the input. On success the
+ * page refreshes to show the new username and the form says so until the User
+ * types again.
  */
 export function ChangeUsernameForm({
   labelledBy,
+  currentUsername,
 }: {
   /** Id of the heading that names this form (the page has two). */
   labelledBy: string;
+  /** The User's current username, so re-typing it sends no availability check. */
+  currentUsername: ModelRow<'User'>['username'];
 }) {
   const { changeUsername, isPending, isSuccess, isError, error } =
     useChangeUsername();
+  const { isFetching } = useCheckUsername();
 
   const form = useCredentialForm({
     formId: 'change-username',
@@ -42,7 +47,10 @@ export function ChangeUsernameForm({
     },
     onSubmit: ({ value }) =>
       changeUsername(value.username, {
-        onSuccess: () => form.reset(),
+        onSuccess: () => {
+          form.reset();
+          toast.success('Username changed.');
+        },
         onError: (error) => {
           if (error.code !== AUTH_ERROR_CODE.USERNAME_TAKEN) return;
           setSubmitError(form, 'username', getErrorMessage(error.code));
@@ -75,32 +83,27 @@ export function ChangeUsernameForm({
       </div>
 
       <div className="flex flex-col gap-5">
-        <form.AppField name="username">
-          {(field) => (
-            <field.CredentialField
-              label="New username"
-              description={USERNAME_RULE_TEXT}
-              inputClassName="font-mono md:max-w-90"
-              autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              enterKeyHint="done"
-              maxLength={USERNAME_MAX_LENGTH}
-            />
-          )}
-        </form.AppField>
+        <UsernameField
+          form={form}
+          fields={{ username: 'username' }}
+          label="New username"
+          currentUsername={currentUsername}
+          inputClassName="md:max-w-90"
+          enterKeyHint="done"
+        />
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <form.Subscribe
-            selector={(state) => state.isValid && !state.isPristine}
+            selector={(state) =>
+              state.isValid && !state.isPristine && !state.isFieldsValidating
+            }
           >
             {(canSubmit) => (
               <Button
                 type="submit"
                 size="lg"
                 className="h-11 gap-2.5 px-4.5 text-base font-bold disabled:aria-busy:opacity-75"
-                disabled={!canSubmit || isPending}
+                disabled={!canSubmit || isPending || isFetching}
                 aria-busy={isPending}
               >
                 {isPending && <Spinner aria-hidden />}

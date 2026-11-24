@@ -13,11 +13,11 @@ export const API_BASE_PATH = '/api';
 
 /**
  * Calls `API_BASE_PATH + path` and returns the parsed JSON body (undefined on
- * 204). Throws ApiError on any non-2xx answer.
+ * 204 or an empty body). Throws ApiError on any non-2xx answer.
  */
 export async function apiRequest<T>(
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<T> {
   const hasBody = init.body !== undefined;
   const res = await fetch(`${API_BASE_PATH}${path}`, {
@@ -25,8 +25,12 @@ export async function apiRequest<T>(
     credentials: 'same-origin',
     headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
     body: hasBody ? JSON.stringify(init.body) : undefined,
+    signal: init.signal,
   });
   if (!res.ok) throw await ApiError.fromResponse(res);
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }

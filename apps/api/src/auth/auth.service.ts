@@ -94,7 +94,6 @@ export class AuthService {
   /**
    * Username + password sign-in. The username must match exactly (no case folding).
    * Unknown username and wrong password give the same 401 and take the same time.
-   * Rate-limited by the controller (LoginThrottlerGuard).
    */
   async loginWithPassword({
     username,
@@ -142,6 +141,14 @@ export class AuthService {
       .first();
     if (!row) throw this.createNotSignedInError();
     return this.toUserDto(sessionUser, row);
+  }
+
+  /** Throws 409 USERNAME_TAKEN when another User already has `username` (exact match). */
+  async checkUsernameAvailability(username: string): Promise<void> {
+    const existing = await this.prismaService.User.where({ username })
+      .select('id')
+      .first();
+    if (existing) throw this.createUsernameTakenError();
   }
 
   /**

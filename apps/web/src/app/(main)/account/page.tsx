@@ -81,7 +81,10 @@ export default async function AccountPage() {
             <p className="font-mono text-base font-semibold">{user.username}</p>
           </div>
           <Separator />
-          <ChangeUsernameForm labelledBy="account-username-title" />
+          <ChangeUsernameForm
+            labelledBy="account-username-title"
+            currentUsername={user.username}
+          />
         </AccountSection>
 
         <AccountSection

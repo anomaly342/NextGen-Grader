@@ -4,8 +4,6 @@ import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
   PASSWORD_RULE_TEXT,
-  USERNAME_MAX_LENGTH,
-  USERNAME_RULE_TEXT,
   getConfirmPasswordError,
   getPasswordError,
   getUsernameError,
@@ -24,6 +22,8 @@ import {
   setSubmitError,
   useCredentialForm,
 } from '@/components/common/form/credential-form';
+import { UsernameField } from '@/components/common/form/username-field';
+import { useCheckUsername } from '@/hooks/use-check-username';
 import { useFinishSetup } from '@/hooks/use-finish-setup';
 import { useLogout } from '@/hooks/use-logout';
 
@@ -44,6 +44,7 @@ export function SetupCard({
 }) {
   const { logout, isBusy: isLoggingOut } = useLogout();
   const { finishSetup, isBusy, isError, error } = useFinishSetup(next);
+  const { isFetching } = useCheckUsername();
 
   const form = useCredentialForm({
     formId: 'setup',
@@ -139,20 +140,11 @@ export function SetupCard({
           </div>
 
           <FieldGroup className="gap-5">
-            <form.AppField name="username">
-              {(field) => (
-                <field.CredentialField
-                  label="Username"
-                  description={USERNAME_RULE_TEXT}
-                  inputClassName="font-mono"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  maxLength={USERNAME_MAX_LENGTH}
-                />
-              )}
-            </form.AppField>
+            <UsernameField
+              form={form}
+              fields={{ username: 'username' }}
+              label="Username"
+            />
             <form.AppField name="password">
               {(field) => (
                 <field.CredentialField
@@ -175,14 +167,16 @@ export function SetupCard({
             </form.AppField>
 
             <form.Subscribe
-              selector={(state) => state.isValid && !state.isPristine}
+              selector={(state) =>
+                state.isValid && !state.isPristine && !state.isFieldsValidating
+              }
             >
               {(canSubmit) => (
                 <Button
                   type="submit"
                   size="lg"
                   className="h-auto min-h-12 w-full gap-2.5 text-base font-bold disabled:aria-busy:opacity-75"
-                  disabled={!canSubmit || isBusy || isLoggingOut}
+                  disabled={!canSubmit || isBusy || isLoggingOut || isFetching}
                   aria-busy={isBusy}
                 >
                   {isBusy && <Spinner aria-hidden />}

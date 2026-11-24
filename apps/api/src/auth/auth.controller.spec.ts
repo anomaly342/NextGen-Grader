@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { LoginThrottlerGuard } from '@/common/guards/login-throttler.guard';
 import type { Response } from 'express';
 import { SessionGuard } from '@/common/guards/session.guard';
 import { SESSION_COOKIE_NAME } from '@/sessions/sessions.constants';
@@ -16,6 +15,7 @@ describe('AuthController', () => {
     | 'setupCredentials'
     | 'loginWithPassword'
     | 'getMe'
+    | 'checkUsernameAvailability'
     | 'changeUsername'
     | 'logout',
     jest.Mock
@@ -49,6 +49,7 @@ describe('AuthController', () => {
         .fn()
         .mockResolvedValue({ cookieId: 'cookie-id', user: expectedUser }),
       getMe: jest.fn().mockResolvedValue(expectedUser),
+      checkUsernameAvailability: jest.fn().mockResolvedValue(undefined),
       changeUsername: jest.fn().mockResolvedValue(expectedUser),
       logout: jest.fn().mockResolvedValue(undefined),
     };
@@ -62,8 +63,6 @@ describe('AuthController', () => {
       providers: [{ provide: AuthService, useValue: mockAuth }],
     })
       .overrideGuard(SessionGuard)
-      .useValue({ canActivate: () => true })
-      .overrideGuard(LoginThrottlerGuard)
       .useValue({ canActivate: () => true })
       .compile();
     controller = module.get(AuthController);
@@ -163,6 +162,16 @@ describe('AuthController', () => {
     const actualBody = await controller.getMe(inputUser);
     expect(mockAuth.getMe).toHaveBeenCalledWith(inputUser);
     expect(actualBody).toEqual(expectedUser);
+  });
+
+  it('GET /auth/check-username delegates to AuthService and returns nothing', async () => {
+    const actualBody = await controller.checkUsername({
+      username: 'somchai_k',
+    });
+    expect(mockAuth.checkUsernameAvailability).toHaveBeenCalledWith(
+      'somchai_k',
+    );
+    expect(actualBody).toBeUndefined();
   });
 
   it('PATCH /auth/username changes the username and leaves ngg.sid alone', async () => {

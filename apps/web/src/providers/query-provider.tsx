@@ -12,7 +12,7 @@ import { useState, type ReactNode } from 'react';
 
 /** TanStack Query for client components, with auth errors handled in one place. */
 export function QueryProvider({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(createQueryClient);
+  const [queryClient] = useState(() => createQueryClient());
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );

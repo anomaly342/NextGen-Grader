@@ -22,7 +22,7 @@ marked _(checked)_. Style rules applied at review time live in `CODING_STANDARDS
 - One export per file; only `.constants.ts` may export several _(checked)_.
 - `src/common/` holds shared code, one folder per kind: `guards/`, `decorators/`, `middleware/`, `swagger/`, `utils/`.
   **Every** guard, decorator and middleware lives there, even one only a single module uses today; such a guard may
-  import that module's constants (`login-throttler.guard.ts` → `@/auth/auth.constants`).
+  import that module's constants.
 - Helpers used by one class are `private` methods of it _(checked for services)_. Helpers shared across modules go in
   `src/common/utils/`.
 - `test/support/` (e2e doubles and helpers) mirrors `src/`'s layout, with shared types in `test/support/interfaces/`.

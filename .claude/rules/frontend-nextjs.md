@@ -73,24 +73,33 @@ validity or touched flags.
   gets its own hook with its own field components, not more fields on the Credential one. Pass a `formId` (`'setup'`,
   `'change-password'`); every input id is `<formId>-<field name>`, so two forms on one page never share an id.
 - A form states its fields, its submit action and its layout. Every Credential input is one field component,
-  `CredentialField` (`components/common/form/credential-field.tsx`), rendered inside `<form.AppField name="username">`
-  as `{(field) => <field.CredentialField label="Username" description={USERNAME_RULE_TEXT} … />}`. The form passes
+  `CredentialField` (`components/common/form/credential-field.tsx`), rendered inside `<form.AppField name="password">`
+  as `{(field) => <field.CredentialField label="Password" description={PASSWORD_RULE_TEXT} … />}`. The form passes
   `label`, the rule text as `description`, the input's `type`, `autoComplete`, `enterKeyHint="done"` on the last input,
-  and `inputClassName` (`font-mono` for usernames, a width cap). `NewPasswordFields` (`new-password-fields.tsx`) is the
-  field group for a new password and its confirmation; map the form's names with
-  `fields={{ password: 'newPassword', confirmPassword: 'confirmPassword' }}`.
+  and `inputClassName` (a width cap). Field groups wrap shared Credential inputs:
+  - `UsernameField` (`username-field.tsx`) owns the username input and its live availability check
+    (`GET /auth/check-username`, debounced 300 ms via TanStack Form's `onChangeAsync` with its abort signal, cached 30 s
+    per username in TanStack Query, skipped while Credential rules fail or when matching `currentUsername`). It shows an
+    unannounced spinner while checking and announces the result ("Available", taken, failure, or current username)
+    through one polite live region.
+  - `NewPasswordFields` (`new-password-fields.tsx`) is the field group for a new password and its confirmation; map the
+    form's names with `fields={{ password: 'newPassword', confirmPassword: 'confirmPassword' }}`.
 - `CredentialField` owns all field-error behaviour; never copy it into a form:
-  - the error shows once the User changed the field and left it, or after a submit attempt, then updates live;
-  - `aria-invalid`, `data-invalid` and `aria-describedby` (error first, then the rule text) follow the same condition;
-  - one error, alert icon with bold 13px text;
+  - form-level rule errors show once the User changed the field and left it, or after a submit attempt, then update
+    live; field-level on-change results (the live username check and current-username check) are the one exception and
+    show while the User is still in the field;
+  - `aria-invalid`, `data-invalid` and `aria-describedby` (error or positive status first, then the rule text) follow
+    the same condition;
+  - one error, alert icon with bold 13px text (and matching green check text for "Available");
   - a submit error clears when the User types, and the input takes focus when one arrives;
   - the rule text, when given, is always shown; pass it for username and new-password inputs.
 - Validation is one form-level `validators.onChange` returning `{ fields: { <name>: text | undefined } }`, so every
   change checks every field (a field-level validator only runs when its own field changes, leaving untouched fields
   "valid"), one line per field. For Credentials it calls the Credential rules in `@repo/lib/auth/credential-rules`
   (`getUsernameError`, `getPasswordError`, `getConfirmPasswordError`), which return the finished message or `undefined`.
-  The API DTOs use the same module's constants.
-- Submit button: `<form.Subscribe selector={(s) => s.isValid && !s.isPristine}>` → `disabled={!canSubmit || isBusy}`.
+  The API DTOs use the same module's constants. Field-level async validation is used only for the live username check.
+- Submit button: `<form.Subscribe selector={(s) => s.isValid && !s.isPristine}>` → `disabled={!canSubmit || isBusy}`
+  (also include `&& !s.isFieldsValidating` when a form has an async field validator such as `UsernameField`).
 - Read form state with `useSelector`, not the deprecated `useStore`.
 - Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) is one call:
   `setSubmitError(form, 'username', getErrorMessage(error.code))`. Anything else shows above the form via

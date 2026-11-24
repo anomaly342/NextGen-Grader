@@ -1,6 +1,5 @@
 import { INestApplication } from '@nestjs/common';
 import { createServer, type RequestListener, type Server } from 'node:http';
-import { getStorageToken } from '@nestjs/throttler';
 import { Test } from '@nestjs/testing';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
 import { Redis } from 'ioredis';
@@ -13,7 +12,6 @@ import { E2E_DATABASE_URL } from './e2e-env.constants';
 import { FakeClockService } from './fake-clock.service';
 import { FakeGoogleOAuthService } from './fake-google-oauth.service';
 import type { E2eApp } from './interfaces/e2e-app.interface';
-import { ResettableThrottlerStorageService } from './resettable-throttler-storage.service';
 
 /** Empties every app table in the e2e database and restarts id sequences. */
 async function truncateTables(postgresClient: PostgresClient): Promise<void> {
@@ -44,20 +42,17 @@ function createWebHost(app: INestApplication<App>): Server {
 }
 
 /**
- * Boots the real AppModule against the e2e Postgres and Redis. Only Google,
- * the clock and the rate-limit storage are swapped for test doubles.
+ * Boots the real AppModule against the e2e Postgres and Redis. Only Google and
+ * the clock are swapped for test doubles.
  */
 export async function createE2eApp(): Promise<E2eApp> {
   const google = new FakeGoogleOAuthService();
   const clock = new FakeClockService();
-  const throttlerStorage = new ResettableThrottlerStorageService();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(GoogleOAuthService)
     .useValue(google)
     .overrideProvider(ClockService)
     .useValue(clock)
-    .overrideProvider(getStorageToken())
-    .useValue(throttlerStorage)
     .compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();
   configureApp(app);
@@ -75,7 +70,6 @@ export async function createE2eApp(): Promise<E2eApp> {
     resetState: async (): Promise<void> => {
       await truncateTables(postgresClient);
       await redis.flushdb();
-      throttlerStorage.reset();
       google.reset();
       clock.reset();
     },

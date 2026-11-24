@@ -29,7 +29,6 @@
     "@nestjs/mapped-types": "*",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^12.1.1",
-    "@nestjs/throttler": "^6.7.1",
     "@repo/lib": "workspace:*",
     "@repo/prisma": "workspace:*",
     "@scalar/nestjs-api-reference": "^1.2.37",
