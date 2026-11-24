@@ -13,7 +13,10 @@ import {
 } from './auth.constants';
 import { AuthService } from './auth.service';
 
-/** Google sign-in. Reads GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL, WEB_URL. */
+/**
+ * Google sign-in. Reads GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_CALLBACK_URL
+ * (`<web host>/api/auth/google/callback`, through the web host's `/api` rewrite).
+ */
 @Module({
   imports: [
     SessionsModule,

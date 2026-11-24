@@ -31,6 +31,10 @@ _Avoid_: Registration, onboarding, sign-up
 A User's username and password, usable as an alternative to signing in with their University account. The username is a sign-in handle only; it is never how a User is shown to others.
 _Avoid_: Login, handle
 
+**Password reset**:
+Choosing a new password without the current one. Allowed only shortly after signing in with the University account, which is how a User proves who they are when they have forgotten their password.
+_Avoid_: Forgot password, password recovery
+
 **Display name**:
 A User's real name, as given by their University account; how they are shown to Teachers and everyone else. Not editable in the app.
 _Avoid_: Username, nickname
@@ -38,6 +42,10 @@ _Avoid_: Username, nickname
 **Examinee**:
 A separate exam-only account tied to one User for one Exam. Only this account can enter that Exam, and it is never usable outside it.
 _Avoid_: Exam user, exam account
+
+**Session**:
+A single active sign-in for one User or one Examinee; signing in again ends the previous one, and User and Examinee sessions stay separate. It holds a copy of Role and Credential setup status from when it opened.
+_Avoid_: Token, login state
 
 ## Classrooms and exams
 

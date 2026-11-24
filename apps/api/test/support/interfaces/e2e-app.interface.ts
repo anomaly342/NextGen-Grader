@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import type { Server } from 'node:http';
 import type { App } from 'supertest/types';
 import type { FakeClockService } from '../fake-clock.service';
 import type { FakeGoogleOAuthService } from '../fake-google-oauth.service';
@@ -6,6 +7,8 @@ import type { FakeGoogleOAuthService } from '../fake-google-oauth.service';
 /** The whole API, booted for e2e tests, with handles on its fakes. */
 export interface E2eApp {
   readonly app: INestApplication<App>;
+  /** The web host in front of Nest: `/api/...` is rewritten to Nest's `/api/v1/...`. */
+  readonly webHost: Server;
   /** Decides which Google account a `code` signs in as. */
   readonly google: FakeGoogleOAuthService;
   /** Server time; move it with `clock.advance(milliseconds)`. */

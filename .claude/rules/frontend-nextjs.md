@@ -19,7 +19,8 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
   - Teacher: `/teach`, `/teach/classrooms/...`, `/admin/users`
 - `apps/exam` is the exam site. One deployment serves each Classroom-year host (`data2026.grader.com`).
   Pages: `/login`, `/problems/[problemId]`. No Classroom or Teacher routes.
-- Middleware on `apps/web`: no session → `/login`; credential setup unfinished → `/setup`.
+- Middleware on `apps/web` calls `GET /auth/me` via the server-only client: no session or 401 → `/login?next=<path>`;
+  credential setup unfinished → `/setup`; a finished User on `/login` or `/setup` → `/`.
   It does not handle an Examinee. Hide the Practice tab when the Classroom is all-mandatory.
 - The exam-room network does not route to the Classroom host. That filter is outside this repo.
 
@@ -30,13 +31,63 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 - `packages/lib` holds pure helpers, the API client, and the socket. Clients use relative URLs.
   They do not know the Nest host. Each app's `next.config` rewrites `/api` to Nest `/api/v1` and proxies the socket.
   No `app/api` proxy route handlers. The apps do not import each other.
-- All server state goes through TanStack Query via that client. No `fetch` in components.
+- Middleware and server components use the app's server-only client (`apps/web/src/lib/server-client.ts`). It reads `API_INTERNAL_URL` and forwards
+  the request's cookies. Server components fetch and pass props.
+- In client components, server state goes through TanStack Query via the browser client. No `fetch` in components.
+- Each mutation lives in its own hook, `apps/web/src/hooks/use-<action>.ts`, not inline in a component. The hook
+  returns named fields (`{ login, isBusy, error }`), never TanStack's whole result object. Use `mutate`;
+  reach for `mutateAsync` only when the caller awaits the result. Pass TanStack's fields through under their own
+  names (`isPending`, `isSuccess`, `isError`). A new name is only for a value the hook derives
+  (`isBusy: isPending || isSuccess` while the page navigates away).
+- Each piece of server data has one owner: a server component or a query, never both on one page.
+  After a mutation, refresh the owner: `router.refresh()` for server-component data, `invalidateQueries` for query data.
+- The browser client handles auth errors in one place: 401 `NOT_SIGNED_IN` → `/login?next=<current>`,
+  403 `CREDENTIAL_SETUP_REQUIRED` → `/setup`.
+- Username and password rules come from `packages/lib`, shared with the API. The API has the final say.
 - Query keys are arrays starting with the resource: `['classroom', id]`, `['submissions', { problemId }]`.
-- Socket events update or invalidate queries in the shared client. Components do not subscribe to sockets directly.
+- Socket events land in the Query cache: `setQueryData` when the event carries the full data, `invalidateQueries`
+  when it only says something changed. One subscription hook per resource (`useSubmissionEvents(submissionId)`) lives
+  in `packages/lib` beside the socket; on reconnect it invalidates its resource's queries to catch missed events.
+  Components read from Query only.
 - Switch on the backend's error `code`, not on message text. Keep a map from code to user-facing text.
+  Compare against `AUTH_ERROR_CODE` from `@repo/lib/auth/error-codes`, the list the API throws with.
 - Show times in Asia/Bangkok; send and receive ISO UTC.
 - Never compute anything that decides access, deadlines or scores on the client; show what the API returns.
   Deadline countdowns are display only.
+
+## State
+
+- Put state in the URL when a link or the back button should restore it (tab, filters, page, chosen Section).
+  URL state uses `nuqs`; add the package with the first page that needs it.
+- Everything else is local `useState` / `useReducer`. No global store.
+
+## Forms
+
+Reference implementation: `apps/web/src/components/setup/setup-card.tsx`. Use TanStack Form's own state for
+everything below; no hand-rolled validity or touched flags.
+
+- Every form uses TanStack Form (`@tanstack/react-form`) with shadcn fields from `packages/ui`.
+- Validation is one form-level `validators.onChange` returning `{ fields: { <name>: text | undefined } }`, so every
+  change checks every field (a field-level validator only runs when its own field changes, leaving untouched fields
+  "valid"). It calls the plain rule functions in `packages/lib` (`checkUsername` → `UsernameIssue`) and maps the
+  issue code to text. The same functions back the API DTOs.
+- A field shows `field.state.meta.errors` under its input when
+  `!meta.isValid && ((meta.isDirty && meta.isBlurred) || hasTriedSubmit)`, with
+  `hasTriedSubmit = useSelector(form.store, (s) => s.submissionAttempts > 0)` (`isShowingErrors` in
+  `apps/web/src/lib/field-errors.ts`). `aria-invalid`, `data-invalid` and `aria-describedby` follow the same condition.
+- A field whose rules are listed under it (`/account`, `/account/reset-password`) uses `RuleChecklist` from
+  `components/common/`: a rule turns green once met and red only under the condition above.
+- Submit button: `<form.Subscribe selector={(s) => s.isValid && !s.isPristine}>` → `disabled={!canSubmit || isBusy}`.
+- Read form state with `useSelector`, not the deprecated `useStore`.
+- Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) goes into that
+  field's `errorMap.onSubmit` via `form.setFieldMeta`, and the field's `listeners.onChange` clears it with
+  `setErrorMap({ onSubmit: undefined })`. Anything else shows above the form via `getErrorMessage(code)`.
+
+## Loading and errors
+
+- Each route segment has `loading.tsx` and `error.tsx`. They render `PageLoading` and `PageError` from
+  `apps/web/src/components/common/` (`PageError` takes the route's title and Next's `retry`).
+- Form errors show inline in the form. Mutation errors outside a form show as a toast (shadcn `sonner`).
 
 ## Uploads
 
@@ -57,5 +108,12 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 
 ## Components
 
-- Pages are server components that render client components for interactive parts.
+- App code lives under `src/`: `src/app`, `src/components`, `src/hooks`, `src/lib`, `src/providers`, and
+  `src/proxy.ts`. Config files (`next.config.ts`, `tsconfig.json`, `eslint.config.mjs`) and `public/` stay at the app root.
+  `@/` points at `src/`.
+- Pages are server components that render client components for interactive parts. Put `'use client'` on the
+  smallest interactive piece.
+- Named exports. Kebab-case file and directory names (`auth-wizard/login-form.tsx`).
+- String-literal unions instead of TS `enum` (`type UsernameIssue = 'TOO_SHORT' | ...`).
+- Tailwind is mobile-first: base classes for 390px, `md:` / `lg:` for wider.
 - Keep domain display logic (score text for each grading mode, level badges) in `packages/lib` with unit tests.

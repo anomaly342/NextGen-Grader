@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local visual-check harness (fake API + headless Chrome), not shared
+/scripts/visual/

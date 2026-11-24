@@ -7,7 +7,7 @@ import { PrismaService } from '@/prisma/prisma.service';
 import { EXAMINEE_SESSION_COOKIE_NAME } from '@/sessions/sessions.constants';
 import { SessionsService } from '@/sessions/sessions.service';
 import { createE2eApp } from './support/e2e-app.util';
-import { E2E_WEB_URL } from './support/e2e-env.constants';
+import type { GoogleCallbackErrorCode } from '@/auth/interfaces/google-callback-error-code.interface';
 import type { E2eApp } from './support/interfaces/e2e-app.interface';
 import type { FakeGoogleProfile } from './support/interfaces/fake-google-profile.interface';
 
@@ -20,29 +20,39 @@ describe('Auth (e2e)', () => {
   let e2e: E2eApp;
 
   /** A browser: keeps its own cookies, like one device in the lab. */
-  const createDevice = (): TestAgent => request.agent(e2e.app.getHttpServer());
+  const createDevice = (): TestAgent => request.agent(e2e.webHost);
 
-  /** Starts Google sign-in on `inputDevice` and returns the `state` Google would echo back. */
-  async function startGoogleSignIn(inputDevice: TestAgent): Promise<string> {
-    const actualResponse = await inputDevice.get('/auth/google').expect(200);
+  /**
+   * Starts Google sign-in on `inputDevice` (asking to come back to `next`, if given)
+   * and returns the `state` Google would echo back.
+   */
+  async function startGoogleSignIn(
+    inputDevice: TestAgent,
+    next?: string,
+  ): Promise<string> {
+    const actualResponse = await inputDevice
+      .get('/api/auth/google')
+      .query(next === undefined ? {} : { next })
+      .expect(200);
     const { url } = actualResponse.body as { url: string };
     return new URL(url).searchParams.get('state')!;
   }
 
-  /** Runs the whole Google flow on `inputDevice` as `profile`. */
+  /** Runs the whole Google flow on `inputDevice` as `profile`, optionally asking to come back to `next`. */
   async function signInWithGoogle(
     inputDevice: TestAgent,
     profile: FakeGoogleProfile,
+    next?: string,
   ): Promise<Response> {
     const code = `code-for-${profile.email}`;
     e2e.google.registerCode(code, profile);
-    const state = await startGoogleSignIn(inputDevice);
-    return inputDevice.get('/auth/google/callback').query({ code, state });
+    const state = await startGoogleSignIn(inputDevice, next);
+    return inputDevice.get('/api/auth/google/callback').query({ code, state });
   }
 
   /** Credential setup on a device that is already signed in. */
   const setupCredentials = (inputDevice: TestAgent, username: string): Test =>
-    inputDevice.post('/auth/setup').send({ username, password: PASSWORD });
+    inputDevice.post('/api/auth/setup').send({ username, password: PASSWORD });
 
   /** A User who signed in with Google once and finished Credential setup. */
   async function createUserWithCredentials(
@@ -64,11 +74,28 @@ describe('Auth (e2e)', () => {
     expect(actualResponse.body).toMatchObject({ code });
   }
 
-  /** The `ngg.sid` Set-Cookie header of `actualResponse`, if any. */
-  function findSessionCookie(actualResponse: Response): string | undefined {
+  /** The Set-Cookie header of `actualResponse` for cookie `name`, if any. */
+  function findCookie(
+    actualResponse: Response,
+    name: string,
+  ): string | undefined {
     return ([] as string[])
       .concat(actualResponse.headers['set-cookie'] ?? [])
-      .find((cookie) => cookie.startsWith('ngg.sid='));
+      .find((cookie) => cookie.startsWith(`${name}=`));
+  }
+
+  /** The `ngg.sid` Set-Cookie header of `actualResponse`, if any. */
+  const findSessionCookie = (actualResponse: Response): string | undefined =>
+    findCookie(actualResponse, 'ngg.sid');
+
+  /** Checks a Google callback sent the browser to /login with error `code` and set no session. */
+  function expectLoginError(
+    actualResponse: Response,
+    code: GoogleCallbackErrorCode,
+  ): void {
+    expect(actualResponse.status).toBe(302);
+    expect(actualResponse.headers['location']).toBe(`/login?error=${code}`);
+    expect(findSessionCookie(actualResponse)).toBeUndefined();
   }
 
   beforeAll(async () => {
@@ -84,18 +111,21 @@ describe('Auth (e2e)', () => {
   });
 
   describe('Google sign-in', () => {
-    it('creates the User, sets ngg.sid and redirects to the web app', async () => {
+    it('through the web host: creates the User, sets a host-only ngg.sid and redirects to /', async () => {
       // Given a student with a verified university account
       const inputDevice = createDevice();
-      // When they sign in with Google
+      // When they sign in with Google through the web host's /api rewrite
       const actualResponse = await signInWithGoogle(inputDevice, {
         email: STUDENT_EMAIL,
         name: 'Somchai K.',
       });
-      // Then they land on the web app with a session that knows who they are
+      // Then they land on the start page with a host-only session cookie for the whole site
       expect(actualResponse.status).toBe(302);
-      expect(actualResponse.headers['location']).toBe(E2E_WEB_URL);
-      expect(findSessionCookie(actualResponse)).toMatch(/HttpOnly/);
+      expect(actualResponse.headers['location']).toBe('/');
+      const actualSessionCookie = findSessionCookie(actualResponse);
+      expect(actualSessionCookie).toMatch(/HttpOnly/);
+      expect(actualSessionCookie).toMatch(/Path=\/;/);
+      expect(actualSessionCookie).not.toMatch(/Domain=/i);
       const { body: actualUser } = (await setupCredentials(
         inputDevice,
         'somchai_k',
@@ -107,6 +137,72 @@ describe('Auth (e2e)', () => {
         username: 'somchai_k',
       });
     });
+
+    it('scopes the host-only oauth_state cookie to the browser-visible /api/auth/google path', async () => {
+      // Given a fresh device
+      // When it starts Google sign-in through the web host
+      const actualResponse = await createDevice()
+        .get('/api/auth/google')
+        .expect(200);
+      // Then the state cookie only goes back to /api/auth/google/..., never Nest's internal path
+      const actualStateCookie = findCookie(actualResponse, 'oauth_state');
+      expect(actualStateCookie).toMatch(/Path=\/api\/auth\/google;/);
+      expect(actualStateCookie).toMatch(/HttpOnly/);
+      expect(actualStateCookie).not.toMatch(/Domain=/i);
+    });
+
+    it('serves the API under /api/v1 only', async () => {
+      // Given a device with no session
+      // When it calls who am I on Nest directly, with and without the prefix
+      // Then only the prefixed route exists
+      await expectErrorCode(
+        request(e2e.app.getHttpServer()).get('/api/v1/auth/me'),
+        401,
+        'NOT_SIGNED_IN',
+      );
+      await request(e2e.app.getHttpServer()).get('/auth/me').expect(404);
+    });
+
+    it('comes back to a same-site next path after sign-in', async () => {
+      // Given a student who opened /problems/1 while signed out
+      const inputDevice = createDevice();
+      // When they sign in with Google asking to come back there
+      const actualResponse = await signInWithGoogle(
+        inputDevice,
+        { email: STUDENT_EMAIL },
+        '/problems/1?tab=statement',
+      );
+      // Then they land on that page, signed in
+      expect(actualResponse.status).toBe(302);
+      expect(actualResponse.headers['location']).toBe(
+        '/problems/1?tab=statement',
+      );
+      expect(findSessionCookie(actualResponse)).toMatch(/HttpOnly/);
+    });
+
+    it.each([
+      '//evil.com',
+      'https://evil.com',
+      '/\\evil.com',
+      '/\t/evil.com',
+      'problems/1',
+    ])(
+      'ignores the off-site or malformed next %j and lands on /',
+      async (inputNext) => {
+        // Given a crafted sign-in link pointing somewhere else
+        const inputDevice = createDevice();
+        // When a student signs in with Google through it
+        const actualResponse = await signInWithGoogle(
+          inputDevice,
+          { email: STUDENT_EMAIL },
+          inputNext,
+        );
+        // Then they still sign in, but land on the start page
+        expect(actualResponse.status).toBe(302);
+        expect(actualResponse.headers['location']).toBe('/');
+        expect(findSessionCookie(actualResponse)).toMatch(/HttpOnly/);
+      },
+    );
 
     it('signs a returning User into the same account', async () => {
       // Given a student who signed in and set up Credentials on one device
@@ -124,44 +220,53 @@ describe('Auth (e2e)', () => {
       );
     });
 
-    it('rejects a callback whose state does not match the cookie', async () => {
+    it('sends a callback whose state does not match the cookie to /login?error=LOGIN_EXPIRED', async () => {
       // Given a device that started sign-in
       const inputDevice = createDevice();
       e2e.google.registerCode('good-code', { email: STUDENT_EMAIL });
       await startGoogleSignIn(inputDevice);
       // When the callback carries a forged state
       const actualResponse = await inputDevice
-        .get('/auth/google/callback')
+        .get('/api/auth/google/callback')
         .query({ code: 'good-code', state: 'forged-state' });
-      // Then sign-in fails and no session is set
-      expect(actualResponse.status).toBe(401);
-      expect(findSessionCookie(actualResponse)).toBeUndefined();
+      // Then they are sent back to /login with LOGIN_EXPIRED and get no session
+      expectLoginError(actualResponse, 'LOGIN_EXPIRED');
     });
 
-    it('rejects a callback on a device that never started sign-in', async () => {
+    it('sends a callback on a device that never started sign-in to /login?error=LOGIN_EXPIRED', async () => {
       // Given a state obtained on another device
       e2e.google.registerCode('good-code', { email: STUDENT_EMAIL });
       const state = await startGoogleSignIn(createDevice());
       // When a fresh device replays it
       const actualResponse = await createDevice()
-        .get('/auth/google/callback')
+        .get('/api/auth/google/callback')
         .query({ code: 'good-code', state });
-      // Then sign-in fails and no session is set
-      expect(actualResponse.status).toBe(401);
-      expect(findSessionCookie(actualResponse)).toBeUndefined();
+      // Then they are sent back to /login with LOGIN_EXPIRED and get no session
+      expectLoginError(actualResponse, 'LOGIN_EXPIRED');
     });
 
-    it('rejects a code Google does not recognise', async () => {
+    it('sends a code Google does not recognise to /login?error=LOGIN_EXPIRED', async () => {
       // Given a device that started sign-in
       const inputDevice = createDevice();
       const state = await startGoogleSignIn(inputDevice);
       // When the callback carries a code Google does not know
       const actualResponse = await inputDevice
-        .get('/auth/google/callback')
+        .get('/api/auth/google/callback')
         .query({ code: 'unknown-code', state });
-      // Then sign-in fails and no session is set
-      expect(actualResponse.status).toBe(401);
-      expect(findSessionCookie(actualResponse)).toBeUndefined();
+      // Then they are sent back to /login with LOGIN_EXPIRED and get no session
+      expectLoginError(actualResponse, 'LOGIN_EXPIRED');
+    });
+
+    it('sends a callback without a code (sign-in cancelled at Google) to /login?error=LOGIN_EXPIRED', async () => {
+      // Given a device that started sign-in
+      const inputDevice = createDevice();
+      const state = await startGoogleSignIn(inputDevice);
+      // When the student cancels on Google's consent screen
+      const actualResponse = await inputDevice
+        .get('/api/auth/google/callback')
+        .query({ error: 'access_denied', state });
+      // Then they are sent back to /login with LOGIN_EXPIRED and get no session
+      expectLoginError(actualResponse, 'LOGIN_EXPIRED');
     });
 
     it('signs in a verified @kmutnb.ac.th account as a Student', async () => {
@@ -187,7 +292,7 @@ describe('Auth (e2e)', () => {
     });
 
     it.each(['outsider@gmail.com', 'student@email.kmutnb.ac.th.evil.com'])(
-      'rejects the non-university email %s',
+      'sends the non-university email %s to /login?error=DOMAIN_NOT_ALLOWED',
       async (inputEmail) => {
         // Given a Google account outside the university domains
         // When someone signs in with a non-university Google account
@@ -195,13 +300,12 @@ describe('Auth (e2e)', () => {
         const actualResponse = await signInWithGoogle(inputDevice, {
           email: inputEmail,
         });
-        // Then they are refused and get no session
-        expect(actualResponse.status).toBe(403);
-        expect(findSessionCookie(actualResponse)).toBeUndefined();
+        // Then they are sent back to /login with DOMAIN_NOT_ALLOWED and get no session
+        expectLoginError(actualResponse, 'DOMAIN_NOT_ALLOWED');
       },
     );
 
-    it('rejects a university email that Google has not verified', async () => {
+    it('sends a university email Google has not verified to /login?error=EMAIL_NOT_VERIFIED', async () => {
       // Given a university email that Google has not verified
       const inputDevice = createDevice();
       // When they try to sign in with Google
@@ -209,9 +313,8 @@ describe('Auth (e2e)', () => {
         email: STUDENT_EMAIL,
         email_verified: false,
       });
-      // Then sign-in fails and no session is set
-      expect(actualResponse.status).toBe(401);
-      expect(findSessionCookie(actualResponse)).toBeUndefined();
+      // Then they are sent back to /login with EMAIL_NOT_VERIFIED and get no session
+      expectLoginError(actualResponse, 'EMAIL_NOT_VERIFIED');
     });
   });
 
@@ -292,7 +395,7 @@ describe('Auth (e2e)', () => {
       // When they call a route other than who am I, Credential setup, or logout
       // Then the server refuses until Credential setup is done
       await expectErrorCode(
-        inputDevice.get('/auth/google'),
+        inputDevice.get('/api/auth/google'),
         403,
         'CREDENTIAL_SETUP_REQUIRED',
       );
@@ -304,12 +407,12 @@ describe('Auth (e2e)', () => {
       await signInWithGoogle(inputDevice, { email: STUDENT_EMAIL });
       // When they call who am I and logout
       // Then who am I and logout still work
-      const me = await inputDevice.get('/auth/me').expect(200);
+      const me = await inputDevice.get('/api/auth/me').expect(200);
       expect(me.body).toMatchObject({
         email: STUDENT_EMAIL,
         credentialsSetAt: null,
       });
-      await inputDevice.post('/auth/logout').expect(204);
+      await inputDevice.post('/api/auth/logout').expect(204);
       // And Credential setup still works on the next sign-in
       await signInWithGoogle(inputDevice, { email: STUDENT_EMAIL });
       await setupCredentials(inputDevice, 'somchai_k').expect(200);
@@ -332,13 +435,13 @@ describe('Auth (e2e)', () => {
       expect(findSessionCookie(setupResponse)).toMatch(/HttpOnly/);
       expect(newCookie).not.toBe(inputOldCookie);
       // And the old cookie is no longer a session
-      const replay = await request(e2e.app.getHttpServer())
-        .get('/auth/me')
+      const replay = await request(e2e.webHost)
+        .get('/api/auth/me')
         .set('Cookie', inputOldCookie);
       expect(replay.status).toBe(401);
       expect(replay.body).toMatchObject({ code: 'NOT_SIGNED_IN' });
       // And the new cookie is past the gate
-      await inputDevice.get('/auth/google').expect(200);
+      await inputDevice.get('/api/auth/google').expect(200);
     });
 
     it('a User who finished setup earlier is not gated after signing in again', async () => {
@@ -348,14 +451,14 @@ describe('Auth (e2e)', () => {
       const googleDevice = createDevice();
       await signInWithGoogle(googleDevice, { email: STUDENT_EMAIL });
       // Then a gated route works
-      await googleDevice.get('/auth/google').expect(200);
+      await googleDevice.get('/api/auth/google').expect(200);
       // And the same is true after a password sign-in
       const passwordDevice = createDevice();
       await passwordDevice
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
-      await passwordDevice.get('/auth/google').expect(200);
+      await passwordDevice.get('/api/auth/google').expect(200);
     });
   });
 
@@ -369,7 +472,7 @@ describe('Auth (e2e)', () => {
       const inputDevice = createDevice();
       // When the student signs in with their Credentials
       const actualResponse = await inputDevice
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD });
       // Then they get the User and a working session on this device
       expect(actualResponse.status).toBe(200);
@@ -395,7 +498,7 @@ describe('Auth (e2e)', () => {
         // Given a User with Credentials
         // When the username or the password does not match
         const actualResponse = await createDevice()
-          .post('/auth/login')
+          .post('/api/auth/login')
           .send({ username: inputUsername, password: inputPassword });
         // Then it is refused and no session is set
         expect(actualResponse.status).toBe(401);
@@ -410,7 +513,7 @@ describe('Auth (e2e)', () => {
       // Given the User somchai_k
       // When someone signs in as Somchai_K with the right password
       const actualResponse = await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'Somchai_K', password: PASSWORD });
       // Then it is refused like any wrong username
       expect(actualResponse.status).toBe(401);
@@ -425,7 +528,7 @@ describe('Auth (e2e)', () => {
     /** One failed password sign-in as `username` from a fresh device on the shared lab IP. */
     const failLogin = (username: string): Test =>
       createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username, password: 'wrong-password' });
 
     beforeEach(async () => {
@@ -437,7 +540,7 @@ describe('Auth (e2e)', () => {
       for (let i = 0; i < 5; i++) await failLogin('somchai_k').expect(401);
       // When a 6th try comes in, even with the right password
       const actualResponse = await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD });
       // Then it is refused with how long to wait
       expect(actualResponse.status).toBe(429);
@@ -465,7 +568,7 @@ describe('Auth (e2e)', () => {
       // Then it is already over the limit
       await expectErrorCode(
         createDevice()
-          .post('/auth/login')
+          .post('/api/auth/login')
           .send({ username: 'somchai_k', password: PASSWORD }),
         429,
         'TOO_MANY_ATTEMPTS',
@@ -480,7 +583,7 @@ describe('Auth (e2e)', () => {
       // When the other student signs in from the same IP
       // Then they get in
       await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'malee_s', password: PASSWORD })
         .expect(200);
     });
@@ -496,7 +599,7 @@ describe('Auth (e2e)', () => {
       // When a fresh username tries from the same IP, even with the right password
       // Then the IP is over its limit
       const actualResponse = await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD });
       expect(actualResponse.status).toBe(429);
       expect(actualResponse.body).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
@@ -518,7 +621,7 @@ describe('Auth (e2e)', () => {
     async function signInWithPassword(username: string): Promise<TestAgent> {
       const inputDevice = createDevice();
       await inputDevice
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username, password: PASSWORD })
         .expect(200);
       return inputDevice;
@@ -527,7 +630,7 @@ describe('Auth (e2e)', () => {
     it('GET /auth/me returns the User when signed in and 401 when not', async () => {
       // Given no session
       await expectErrorCode(
-        createDevice().get('/auth/me'),
+        createDevice().get('/api/auth/me'),
         401,
         'NOT_SIGNED_IN',
       );
@@ -538,7 +641,7 @@ describe('Auth (e2e)', () => {
         name: 'Somchai K.',
       });
       // Then who am I shows that User, and the username after Credential setup
-      const actualUser = await readBody(inputDevice.get('/auth/me'));
+      const actualUser = await readBody(inputDevice.get('/api/auth/me'));
       expect(actualUser).toMatchObject({
         email: STUDENT_EMAIL,
         name: 'Somchai K.',
@@ -548,7 +651,7 @@ describe('Auth (e2e)', () => {
       });
       expect(actualUser).not.toHaveProperty('passwordHash');
       await setupCredentials(inputDevice, 'somchai_k').expect(200);
-      const actualAfterSetup = await readBody(inputDevice.get('/auth/me'));
+      const actualAfterSetup = await readBody(inputDevice.get('/api/auth/me'));
       expect(actualAfterSetup).toMatchObject({
         username: 'somchai_k',
         credentialsSetAt: expect.any(String) as unknown,
@@ -563,8 +666,12 @@ describe('Auth (e2e)', () => {
       const inputDeviceB = createDevice();
       await signInWithGoogle(inputDeviceB, { email: STUDENT_EMAIL });
       // Then device A is signed out and device B works
-      await expectErrorCode(inputDeviceA.get('/auth/me'), 401, 'NOT_SIGNED_IN');
-      const actualUser = await readBody(inputDeviceB.get('/auth/me'));
+      await expectErrorCode(
+        inputDeviceA.get('/api/auth/me'),
+        401,
+        'NOT_SIGNED_IN',
+      );
+      const actualUser = await readBody(inputDeviceB.get('/api/auth/me'));
       expect(actualUser).toMatchObject({ email: STUDENT_EMAIL });
     });
 
@@ -575,8 +682,12 @@ describe('Auth (e2e)', () => {
       const inputDeviceA = await signInWithPassword('somchai_k');
       const inputDeviceB = await signInWithPassword('somchai_k');
       // Then device A is signed out and device B works
-      await expectErrorCode(inputDeviceA.get('/auth/me'), 401, 'NOT_SIGNED_IN');
-      const actualUser = await readBody(inputDeviceB.get('/auth/me'));
+      await expectErrorCode(
+        inputDeviceA.get('/api/auth/me'),
+        401,
+        'NOT_SIGNED_IN',
+      );
+      const actualUser = await readBody(inputDeviceB.get('/api/auth/me'));
       expect(actualUser).toMatchObject({ username: 'somchai_k' });
     });
 
@@ -588,15 +699,15 @@ describe('Auth (e2e)', () => {
       // When both devices sign in with the password at the same time
       await Promise.all([
         inputDeviceA
-          .post('/auth/login')
+          .post('/api/auth/login')
           .send({ username: 'somchai_k', password: PASSWORD }),
         inputDeviceB
-          .post('/auth/login')
+          .post('/api/auth/login')
           .send({ username: 'somchai_k', password: PASSWORD }),
       ]);
       const [meA, meB] = await Promise.all([
-        inputDeviceA.get('/auth/me'),
-        inputDeviceB.get('/auth/me'),
+        inputDeviceA.get('/api/auth/me'),
+        inputDeviceB.get('/api/auth/me'),
       ]);
       // Then exactly one session is alive
       const actualSuccesses = [meA, meB].filter(
@@ -610,21 +721,27 @@ describe('Auth (e2e)', () => {
       await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
       const inputDevice = createDevice();
       const loginResponse = await inputDevice
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
       const inputOldCookie = findSessionCookie(loginResponse)!.split(';')[0];
       // When they log out
-      const logoutResponse = await inputDevice.post('/auth/logout').expect(204);
+      const logoutResponse = await inputDevice
+        .post('/api/auth/logout')
+        .expect(204);
       // Then ngg.sid is cleared and the old cookie gets 401
       expect(findSessionCookie(logoutResponse)).toMatch(/^ngg\.sid=;/);
       const setCookie = ([] as string[])
         .concat(logoutResponse.headers['set-cookie'] ?? [])
         .join('\n');
       expect(setCookie).not.toContain(EXAMINEE_SESSION_COOKIE_NAME);
-      await expectErrorCode(inputDevice.get('/auth/me'), 401, 'NOT_SIGNED_IN');
-      const replay = await request(e2e.app.getHttpServer())
-        .get('/auth/me')
+      await expectErrorCode(
+        inputDevice.get('/api/auth/me'),
+        401,
+        'NOT_SIGNED_IN',
+      );
+      const replay = await request(e2e.webHost)
+        .get('/api/auth/me')
         .set('Cookie', inputOldCookie);
       expect(replay.status).toBe(401);
       expect(replay.body).toMatchObject({ code: 'NOT_SIGNED_IN' });
@@ -647,8 +764,8 @@ describe('Auth (e2e)', () => {
         lastLoginAt: null,
       });
       // When who am I is called with that cookie
-      const actualResponse = await request(e2e.app.getHttpServer())
-        .get('/auth/me')
+      const actualResponse = await request(e2e.webHost)
+        .get('/api/auth/me')
         .set('Cookie', `ngg.sid=${cookieId}`);
       // Then it is refused
       expect(actualResponse.status).toBe(401);
@@ -660,8 +777,8 @@ describe('Auth (e2e)', () => {
       // When who am I is called
       // Then it is refused
       await expectErrorCode(
-        request(e2e.app.getHttpServer())
-          .get('/auth/me')
+        request(e2e.webHost)
+          .get('/api/auth/me')
           .set('Cookie', `${EXAMINEE_SESSION_COOKIE_NAME}=not-a-user-session`),
         401,
         'NOT_SIGNED_IN',
@@ -675,7 +792,9 @@ describe('Auth (e2e)', () => {
       expect(procedure).toContain('DEL ngg:session:pointer:USER:<id>');
       await createUserWithCredentials(STUDENT_EMAIL, 'somchai_k');
       const inputDevice = await signInWithPassword('somchai_k');
-      const actualBefore = (await readBody(inputDevice.get('/auth/me'))) as {
+      const actualBefore = (await readBody(
+        inputDevice.get('/api/auth/me'),
+      )) as {
         id: number;
       };
       expect(actualBefore).toMatchObject({ role: 'STUDENT' });
@@ -686,7 +805,7 @@ describe('Auth (e2e)', () => {
         .update({
           role: 'TEACHER',
         });
-      const actualStillOld = await readBody(inputDevice.get('/auth/me'));
+      const actualStillOld = await readBody(inputDevice.get('/api/auth/me'));
       expect(actualStillOld).toMatchObject({ role: 'STUDENT' });
       const redis = e2e.app.get(Redis);
       const inputPointerKey = `ngg:session:pointer:USER:${actualBefore.id}`;
@@ -695,12 +814,16 @@ describe('Auth (e2e)', () => {
       await redis.del(`ngg:session:${cookieId}`);
       await redis.del(inputPointerKey);
       // Then the old session is over and the next sign-in has the new Role
-      await expectErrorCode(inputDevice.get('/auth/me'), 401, 'NOT_SIGNED_IN');
+      await expectErrorCode(
+        inputDevice.get('/api/auth/me'),
+        401,
+        'NOT_SIGNED_IN',
+      );
       await inputDevice
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
-      const actualUser = await readBody(inputDevice.get('/auth/me'));
+      const actualUser = await readBody(inputDevice.get('/api/auth/me'));
       expect(actualUser).toMatchObject({ role: 'TEACHER' });
     });
   });
@@ -710,7 +833,7 @@ describe('Auth (e2e)', () => {
     async function signInWithPassword(username: string): Promise<TestAgent> {
       const inputDevice = createDevice();
       await inputDevice
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username, password: PASSWORD })
         .expect(200);
       return inputDevice;
@@ -718,7 +841,7 @@ describe('Auth (e2e)', () => {
 
     /** PATCH /auth/username on `inputDevice`. */
     const changeUsername = (inputDevice: TestAgent, username: string): Test =>
-      inputDevice.patch('/auth/username').send({ username });
+      inputDevice.patch('/api/auth/username').send({ username });
 
     it('renames: login works with the new username and fails with the old one', async () => {
       // Given a User signed in as "somchai_k"
@@ -738,7 +861,7 @@ describe('Auth (e2e)', () => {
       // And the old username no longer signs in, the new one does
       await expectErrorCode(
         createDevice()
-          .post('/auth/login')
+          .post('/api/auth/login')
           .send({ username: 'somchai_k', password: PASSWORD }),
         401,
         'INVALID_CREDENTIALS',
@@ -753,7 +876,7 @@ describe('Auth (e2e)', () => {
       // When they rename
       await changeUsername(inputDevice, 'somchai_new').expect(200);
       // Then the same cookie still works and shows the new username
-      const actualMe = await inputDevice.get('/auth/me').expect(200);
+      const actualMe = await inputDevice.get('/api/auth/me').expect(200);
       expect(actualMe.body).toMatchObject({ username: 'somchai_new' });
       // And they can rename again (no limit)
       await changeUsername(inputDevice, 'somchai_3').expect(200);
@@ -817,8 +940,8 @@ describe('Auth (e2e)', () => {
       }
       // And the two usernames are still different
       const [meA, meB] = await Promise.all([
-        inputDeviceA.get('/auth/me').expect(200),
-        inputDeviceB.get('/auth/me').expect(200),
+        inputDeviceA.get('/api/auth/me').expect(200),
+        inputDeviceB.get('/api/auth/me').expect(200),
       ]);
       const { username: actualUsernameA } = meA.body as { username: string };
       const { username: actualUsernameB } = meB.body as { username: string };
@@ -858,7 +981,7 @@ describe('Auth (e2e)', () => {
     async function signInWithPassword(): Promise<TestAgent> {
       const inputDevice = createDevice();
       await inputDevice
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
       return inputDevice;
@@ -867,14 +990,14 @@ describe('Auth (e2e)', () => {
     /** The old password is refused at login and the new one signs in. */
     async function expectPasswordSwapped(): Promise<void> {
       const actualOldLogin = await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD });
       expect(actualOldLogin.status).toBe(401);
       expect(actualOldLogin.body).toMatchObject({
         code: 'INVALID_CREDENTIALS',
       });
       await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: NEW_PASSWORD })
         .expect(200);
     }
@@ -885,11 +1008,11 @@ describe('Auth (e2e)', () => {
       const inputDevice = await signInWithPassword();
       // When they change it
       await inputDevice
-        .post('/auth/password')
+        .post('/api/auth/password')
         .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD })
         .expect(204);
       // Then this cookie still works, the old password fails, and the new one works
-      await inputDevice.get('/auth/me').expect(200);
+      await inputDevice.get('/api/auth/me').expect(200);
       await expectPasswordSwapped();
     });
 
@@ -899,7 +1022,7 @@ describe('Auth (e2e)', () => {
       const inputDevice = await signInWithPassword();
       // When they send the wrong current password
       await expectErrorCode(
-        inputDevice.post('/auth/password').send({
+        inputDevice.post('/api/auth/password').send({
           currentPassword: 'wrong-password',
           newPassword: NEW_PASSWORD,
         }),
@@ -907,13 +1030,13 @@ describe('Auth (e2e)', () => {
         'INVALID_CREDENTIALS',
       );
       // Then this session stays and the password is unchanged
-      await inputDevice.get('/auth/me').expect(200);
+      await inputDevice.get('/api/auth/me').expect(200);
       await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
       const actualNewLogin = await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: NEW_PASSWORD });
       expect(actualNewLogin.status).toBe(401);
       expect(actualNewLogin.body).toMatchObject({
@@ -928,16 +1051,16 @@ describe('Auth (e2e)', () => {
       const inputTooLong = 'a'.repeat(73);
       // When the new password is shorter than 8 or longer than 72
       await inputDevice
-        .post('/auth/password')
+        .post('/api/auth/password')
         .send({ currentPassword: PASSWORD, newPassword: 'short' })
         .expect(400);
       await inputDevice
-        .post('/auth/password')
+        .post('/api/auth/password')
         .send({ currentPassword: PASSWORD, newPassword: inputTooLong })
         .expect(400);
       // Then the old password still signs in
       await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
     });
@@ -948,7 +1071,7 @@ describe('Auth (e2e)', () => {
       await signInWithGoogle(inputDevice, { email: STUDENT_EMAIL });
       // When they try to change the password
       await expectErrorCode(
-        inputDevice.post('/auth/password').send({
+        inputDevice.post('/api/auth/password').send({
           currentPassword: PASSWORD,
           newPassword: NEW_PASSWORD,
         }),
@@ -964,11 +1087,11 @@ describe('Auth (e2e)', () => {
       await setupCredentials(inputDevice, 'somchai_k').expect(200);
       // When they set a new password without the old one
       await inputDevice
-        .post('/auth/password/reset')
+        .post('/api/auth/password/reset')
         .send({ newPassword: NEW_PASSWORD })
         .expect(204);
       // Then this session stays, the old password fails, and the new one works
-      await inputDevice.get('/auth/me').expect(200);
+      await inputDevice.get('/api/auth/me').expect(200);
       await expectPasswordSwapped();
     });
 
@@ -981,14 +1104,14 @@ describe('Auth (e2e)', () => {
       // When they try to reset
       await expectErrorCode(
         inputDevice
-          .post('/auth/password/reset')
+          .post('/api/auth/password/reset')
           .send({ newPassword: NEW_PASSWORD }),
         403,
         'RECENT_GOOGLE_SIGN_IN_REQUIRED',
       );
       // Then the password is unchanged
       await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
     });
@@ -1001,16 +1124,16 @@ describe('Auth (e2e)', () => {
       const inputTooLong = 'a'.repeat(73);
       // When the new password is shorter than 8 or longer than 72
       await inputDevice
-        .post('/auth/password/reset')
+        .post('/api/auth/password/reset')
         .send({ newPassword: 'short' })
         .expect(400);
       await inputDevice
-        .post('/auth/password/reset')
+        .post('/api/auth/password/reset')
         .send({ newPassword: inputTooLong })
         .expect(400);
       // Then the old password still signs in
       await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
     });
@@ -1022,7 +1145,7 @@ describe('Auth (e2e)', () => {
       // When they try to reset
       await expectErrorCode(
         inputDevice
-          .post('/auth/password/reset')
+          .post('/api/auth/password/reset')
           .send({ newPassword: NEW_PASSWORD }),
         403,
         'CREDENTIAL_SETUP_REQUIRED',
@@ -1036,14 +1159,14 @@ describe('Auth (e2e)', () => {
       // When they try to reset without the old password
       await expectErrorCode(
         inputDevice
-          .post('/auth/password/reset')
+          .post('/api/auth/password/reset')
           .send({ newPassword: NEW_PASSWORD }),
         403,
         'RECENT_GOOGLE_SIGN_IN_REQUIRED',
       );
       // Then the password is unchanged
       await createDevice()
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'somchai_k', password: PASSWORD })
         .expect(200);
     });

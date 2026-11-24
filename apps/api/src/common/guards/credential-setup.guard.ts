@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import {
   CanActivate,
   ExecutionContext,
@@ -37,7 +38,7 @@ export class CredentialSetupGuard implements CanActivate {
     const session = await this.sessionsService.findCurrentUserSession(cookieId);
     if (!session || session.credentialsSetAt != null) return true;
     throw new ForbiddenException({
-      code: 'CREDENTIAL_SETUP_REQUIRED',
+      code: AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED,
       message: 'Finish Credential setup first',
     });
   }

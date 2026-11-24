@@ -3,6 +3,10 @@ import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import {
+  ERROR_CODE_COMPARISON,
+  ERROR_CODE_PROPERTY,
+} from '../../eslint.shared.mjs';
 
 export default tseslint.config(
   {
@@ -26,7 +30,8 @@ export default tseslint.config(
   },
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-deprecated': 'error',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       // `const { passwordHash: _, ...rest } = row` drops a field on purpose.
@@ -34,7 +39,18 @@ export default tseslint.config(
         'error',
         { ignoreRestSiblings: true },
       ],
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
+    },
+  },
+  {
+    // Tests compare against known-good literals on purpose (CODING_STANDARDS.md).
+    ignores: ['**/*.spec.ts', 'test/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ERROR_CODE_COMPARISON,
+        ERROR_CODE_PROPERTY,
+      ],
     },
   },
 );

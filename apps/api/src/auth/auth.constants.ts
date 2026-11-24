@@ -1,3 +1,4 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import type { CookieOptions } from 'express';
 
 /** Cookie holding the OAuth `state` between /auth/google and its callback (CSRF check). */
@@ -6,8 +7,23 @@ export const OAUTH_STATE_COOKIE_NAME = 'oauth_state';
 /** How long a login attempt may take, in milliseconds (10 minutes). */
 export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-/** Path both Google routes live under, so the state cookie is only sent there. */
-export const GOOGLE_AUTH_PATH = '/auth/google';
+/**
+ * Browser-visible path both Google routes live under, so the state cookie is
+ * only sent there. The browser sees the web host's `/api` rewrite, not Nest's
+ * internal `/api/v1` prefix, so the cookie path uses `/api`.
+ */
+export const GOOGLE_AUTH_COOKIE_PATH = '/api/auth/google';
+
+/**
+ * Google sign-in failures the callback sends back to `/login?error=<code>`
+ * instead of answering with JSON: the browser is mid-redirect, not a fetch.
+ * LOGIN_EXPIRED covers a missing, mismatched or expired state or code.
+ */
+export const GOOGLE_CALLBACK_ERROR_CODES = [
+  AUTH_ERROR_CODE.LOGIN_EXPIRED,
+  AUTH_ERROR_CODE.EMAIL_NOT_VERIFIED,
+  AUTH_ERROR_CODE.DOMAIN_NOT_ALLOWED,
+] as const;
 
 /** Google scopes: an ID token with the user's email, name and picture. */
 export const GOOGLE_SCOPES = ['openid', 'email', 'profile'];
@@ -34,15 +50,6 @@ export const BASE_COOKIE_OPTIONS: CookieOptions = {
   sameSite: 'lax',
   secure: process.env['NODE_ENV'] === 'production',
 };
-
-/** Username rules for POST /auth/setup: 4–20 chars, lowercase letters, digits, underscore. */
-export const USERNAME_MIN_LENGTH = 4;
-export const USERNAME_MAX_LENGTH = 20;
-export const USERNAME_PATTERN = /^[a-z0-9_]+$/;
-
-/** Password length. bcrypt ignores everything past 72 bytes, so longer is refused. */
-export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_MAX_LENGTH = 72;
 
 /** How long after a Google sign-in a forgotten-password reset is allowed. */
 export const PASSWORD_RESET_WINDOW_MS = 10 * 60 * 1000;

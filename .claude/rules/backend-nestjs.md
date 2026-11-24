@@ -34,8 +34,7 @@ rules marked _(checked)_. Style rules applied at review time live in `CODING_STA
   is for the same folder. Inside `test/`, `../` between test files is fine; reach `src/` through `@/`.
 - Name an injected dependency after its type in camelCase, never shortened: `prismaService: PrismaService`,
   `redisService: Redis`, `jwtService: JwtService` _(checked for those three)_.
-- Persist through `PrismaService` (models come from the `@repo/prisma` contract); no entity classes. A field
-  copied from a Prisma model keeps the column's name and type `ModelRow<'Model'>['field']`.
+- Persist through `PrismaService` (models come from the `@repo/prisma` contract); no entity classes.
 
 ## Tests
 

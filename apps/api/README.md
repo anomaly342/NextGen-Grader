@@ -31,6 +31,21 @@
 $ npm install
 ```
 
+## Environment
+
+`bun run dev` reads `.env.development` (gitignored). Browsers reach the API only through the web
+host's `/api` rewrite to Nest's `/api/v1` prefix (ADR 0002), so auth cookies stay on the web host.
+
+| Variable                                   | Example (local)                                  | Notes                                                                                                                              |
+| ------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                                     | `4000`                                           | Nest listens here; the web app's `API_INTERNAL_URL` points at it.                                                                  |
+| `WEB_URL`                                  | `http://localhost:3000`                          | Allowed CORS origin, for local dev tools only.                                                                                     |
+| `GOOGLE_CALLBACK_URL`                      | `http://localhost:3000/api/auth/google/callback` | Always `<web host>/api/auth/google/callback`, never the API host. Register each one as a redirect URI in the Google OAuth console. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |                                                  | Google OAuth client.                                                                                                               |
+| `JWT_SECRET`                               |                                                  | Signs session cookies.                                                                                                             |
+| `NODE_ENV`                                 | `production`                                     | `production` makes auth cookies `Secure` (HTTPS only).                                                                             |
+| `DATABASE_URL`, `REDIS_URL`                |                                                  | Postgres and Redis.                                                                                                                |
+
 ## Compile and run the project
 
 ```bash

@@ -10,5 +10,5 @@ export const E2E_DATABASE_URL =
 export const E2E_REDIS_URL =
   process.env['E2E_REDIS_URL'] ?? 'redis://:redis@localhost:6379/15';
 
-/** Where the API redirects after Google sign-in. */
+/** The web host: the allowed CORS origin and the host Google's callback goes through. */
 export const E2E_WEB_URL = 'http://web.test';

@@ -1,0 +1,7 @@
+@import '@repo/ui/globals.css';
+
+@theme inline {
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-heading: var(--font-manrope);
+}

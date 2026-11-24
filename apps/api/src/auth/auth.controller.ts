@@ -1,14 +1,15 @@
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import {
   Body,
   Controller,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   Patch,
   Post,
   Query,
   Res,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -32,10 +33,15 @@ import {
 } from '@/sessions/sessions.constants';
 import {
   BASE_COOKIE_OPTIONS,
-  GOOGLE_AUTH_PATH,
+  GOOGLE_AUTH_COOKIE_PATH,
+  GOOGLE_CALLBACK_ERROR_CODES,
   OAUTH_STATE_COOKIE_NAME,
   OAUTH_STATE_TTL_MS,
 } from './auth.constants';
+import {
+  NEXT_PATH_MAX_LENGTH,
+  getSameSitePath,
+} from '@repo/lib/auth/next-path';
 import { USER_RESPONSE_SCHEMA } from '@/common/swagger/swagger.constants';
 import { errorSchema } from '@/common/swagger/swagger.util';
 import { AuthService } from './auth.service';
@@ -46,6 +52,8 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
 import type { UserDto } from './dto/user.dto';
 import type { GoogleAuthUrl } from './interfaces/google-auth-url.interface';
+import type { GoogleCallbackErrorCode } from './interfaces/google-callback-error-code.interface';
+import type { OAuthState } from './interfaces/oauth-state.interface';
 
 /** Sign-in routes: Google OAuth, Credential setup, login, username change, and password change or reset. */
 @ApiTags('Auth')
@@ -60,13 +68,24 @@ export class AuthController {
     description:
       'Call with `credentials: "include"`, then send the browser to `url` ' +
       '(`window.location.href = url`). Sets a short-lived `oauth_state` cookie (CSRF protection) ' +
-      'that `GET /auth/google/callback` checks after the user signs in with Google.',
+      'that `GET /auth/google/callback` checks after the user signs in with Google. ' +
+      'The cookie path is the browser-visible `/api/auth/google`: call through the web ' +
+      "host's `/api` rewrite, not Nest's `/api/v1` directly.",
+  })
+  @ApiQuery({
+    name: 'next',
+    required: false,
+    description:
+      'Where to land after sign-in. Kept only if it is a same-site relative path ' +
+      '(one leading `/`, not `//`, no scheme, no backslash or control characters, at most ' +
+      `${NEXT_PATH_MAX_LENGTH} characters); anything else is dropped and the User lands on \`/\`.`,
+    example: '/problems/1',
   })
   @ApiResponse({
     status: 403,
     description:
       'This browser already has a User session whose Credential setup is not done.',
-    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED),
   })
   @ApiOkResponse({
     description: 'The Google sign-in URL.',
@@ -81,17 +100,23 @@ export class AuthController {
       },
     },
   })
-  getGoogleAuthUrl(@Res({ passthrough: true }) res: Response): GoogleAuthUrl {
-    const state = randomUUID();
-    res.cookie(OAUTH_STATE_COOKIE_NAME, state, {
+  getGoogleAuthUrl(
+    @Query('next') next: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ): GoogleAuthUrl {
+    const oauthState: OAuthState = {
+      state: randomUUID(),
+      next: getSameSitePath(next),
+    };
+    res.cookie(OAUTH_STATE_COOKIE_NAME, JSON.stringify(oauthState), {
       ...BASE_COOKIE_OPTIONS,
-      path: GOOGLE_AUTH_PATH,
+      path: GOOGLE_AUTH_COOKIE_PATH,
       maxAge: OAUTH_STATE_TTL_MS,
     });
-    return { url: this.authService.buildGoogleAuthUrl(state) };
+    return { url: this.authService.buildGoogleAuthUrl(oauthState.state) };
   }
 
-  /** Google redirects here: checks `state`, signs in, sets the session cookie, returns to the web app. */
+  /** Google redirects here: checks `state`, signs in, sets the session cookie, returns to `next` or /login on failure. */
   @Get('google/callback')
   @ApiOperation({
     summary: 'Google sign-in callback',
@@ -99,11 +124,16 @@ export class AuthController {
       'Called by Google, not by the web app. Checks `state` against the `oauth_state` cookie, ' +
       'verifies the Google account (verified email required), creates the user on first login ' +
       'or updates their profile, then sets the httpOnly `ngg.sid` session cookie (7 days) and ' +
-      'redirects to the web app (`WEB_URL`).',
+      'redirects to the `next` path stored by `GET /auth/google`, or `/`. Never answers with JSON ' +
+      'for a sign-in failure: it redirects to `/login?error=<code>` instead. Redirects are relative, ' +
+      'so the browser stays on the web host. Register `<web host>/api/auth/google/callback` ' +
+      'as the redirect URI in the Google OAuth console.',
   })
   @ApiQuery({
     name: 'code',
-    description: 'One-time authorization code from Google.',
+    required: false,
+    description:
+      'One-time authorization code from Google. Missing when the User cancelled at Google.',
   })
   @ApiQuery({
     name: 'state',
@@ -112,31 +142,39 @@ export class AuthController {
   @ApiResponse({
     status: 302,
     description:
-      'Signed in: sets the `ngg.sid` cookie and redirects to the web app.',
-  })
-  @ApiResponse({
-    status: 401,
-    description:
-      'State mismatch or expired, invalid code, or unverified Google email.',
-  })
-  @ApiResponse({
-    status: 403,
-    description:
-      'The Google account is not an @email.kmutnb.ac.th or @kmutnb.ac.th account.',
+      'Signed in: sets `ngg.sid` and redirects to `next` or `/`. ' +
+      'Failed: sets no session and redirects to `/login?error=<code>`, where `<code>` is ' +
+      '`LOGIN_EXPIRED` (missing, mismatched or expired state, or a missing or invalid code, ' +
+      'e.g. sign-in cancelled at Google), `EMAIL_NOT_VERIFIED` (Google has not verified the email) ' +
+      'or `DOMAIN_NOT_ALLOWED` (not an @email.kmutnb.ac.th or @kmutnb.ac.th account).',
+    headers: {
+      Location: {
+        description: '`next`, `/`, or `/login?error=<code>`.',
+        schema: { type: 'string', example: '/login?error=DOMAIN_NOT_ALLOWED' },
+      },
+    },
   })
   async handleGoogleCallback(
     @Query('code') code: string | undefined,
     @Query('state') state: string | undefined,
-    @Cookies(OAUTH_STATE_COOKIE_NAME) expectedState: string | undefined,
+    @Cookies(OAUTH_STATE_COOKIE_NAME) rawOAuthState: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
-    res.clearCookie(OAUTH_STATE_COOKIE_NAME, { path: GOOGLE_AUTH_PATH });
-    if (!code || !state || state !== expectedState) {
-      throw new UnauthorizedException('Invalid or expired login attempt');
+    res.clearCookie(OAUTH_STATE_COOKIE_NAME, { path: GOOGLE_AUTH_COOKIE_PATH });
+    const oauthState = this.readOAuthState(rawOAuthState);
+    if (!code || !state || !oauthState || state !== oauthState.state) {
+      return this.redirectToLoginError(res, AUTH_ERROR_CODE.LOGIN_EXPIRED);
     }
-    const cookieId = await this.authService.loginWithGoogle(code);
+    let cookieId: string;
+    try {
+      cookieId = await this.authService.loginWithGoogle(code);
+    } catch (error) {
+      const errorCode = this.toGoogleCallbackErrorCode(error);
+      if (!errorCode) throw error;
+      return this.redirectToLoginError(res, errorCode);
+    }
     this.setSessionCookie(res, cookieId);
-    res.redirect(process.env['WEB_URL']!);
+    res.redirect(oauthState.next ?? '/');
   }
 
   /** First login only: sets the username and password used by POST /auth/login. */
@@ -156,12 +194,12 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   @ApiResponse({
     status: 409,
     description: '`USERNAME_TAKEN` or `SETUP_ALREADY_DONE`.',
-    schema: errorSchema('USERNAME_TAKEN'),
+    schema: errorSchema(AUTH_ERROR_CODE.USERNAME_TAKEN),
   })
   async setupCredentials(
     @CurrentUser() sessionUser: SessionUser,
@@ -191,20 +229,20 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Unknown username or wrong password (same error for both).',
-    schema: errorSchema('INVALID_CREDENTIALS'),
+    schema: errorSchema(AUTH_ERROR_CODE.INVALID_CREDENTIALS),
   })
   @ApiResponse({
     status: 403,
     description:
       'This browser already has a User session whose Credential setup is not done.',
-    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED),
   })
   @ApiResponse({
     status: 429,
     description:
       'Too many tries for this username or from this IP. Body includes `retryAfterSec`; ' +
       'the `Retry-After` header carries the same value.',
-    schema: errorSchema('TOO_MANY_ATTEMPTS', {
+    schema: errorSchema(AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS, {
       retryAfterSec: { type: 'integer', example: 42 },
     }),
   })
@@ -231,7 +269,7 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in, or `ngg.sid` is not a current User session.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   getMe(@CurrentUser() sessionUser: SessionUser): Promise<UserDto> {
     return this.authService.getMe(sessionUser);
@@ -252,17 +290,17 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   @ApiResponse({
     status: 403,
     description: 'Credential setup is not done.',
-    schema: errorSchema('CREDENTIAL_SETUP_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED),
   })
   @ApiResponse({
     status: 409,
     description: 'Another User has that username.',
-    schema: errorSchema('USERNAME_TAKEN'),
+    schema: errorSchema(AUTH_ERROR_CODE.USERNAME_TAKEN),
   })
   changeUsername(
     @CurrentUser() sessionUser: SessionUser,
@@ -293,7 +331,7 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in, or the current password is wrong.',
-    schema: errorSchema('INVALID_CREDENTIALS'),
+    schema: errorSchema(AUTH_ERROR_CODE.INVALID_CREDENTIALS),
   })
   async changePassword(
     @CurrentUser() sessionUser: SessionUser,
@@ -328,13 +366,13 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   @ApiResponse({
     status: 403,
     description:
       'This session was not started by a Google sign-in in the last 10 minutes.',
-    schema: errorSchema('RECENT_GOOGLE_SIGN_IN_REQUIRED'),
+    schema: errorSchema(AUTH_ERROR_CODE.RECENT_GOOGLE_SIGN_IN_REQUIRED),
   })
   async resetPassword(
     @CurrentUser() sessionUser: SessionUser,
@@ -359,7 +397,7 @@ export class AuthController {
   @ApiResponse({
     status: 401,
     description: 'Not signed in.',
-    schema: errorSchema('NOT_SIGNED_IN'),
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
   async logout(
     @Cookies(SESSION_COOKIE_NAME) cookieId: string,
@@ -367,6 +405,37 @@ export class AuthController {
   ): Promise<void> {
     await this.authService.logout(cookieId);
     this.clearSessionCookie(res);
+  }
+
+  /** Sends the browser back to the web host's /login page with `errorCode`. */
+  private redirectToLoginError(
+    res: Response,
+    errorCode: GoogleCallbackErrorCode,
+  ): void {
+    res.redirect(`/login?error=${errorCode}`);
+  }
+
+  /** The error's `code` if it is a Google sign-in failure /login can show, otherwise null. */
+  private toGoogleCallbackErrorCode(
+    error: unknown,
+  ): GoogleCallbackErrorCode | null {
+    if (!(error instanceof HttpException)) return null;
+    const body = error.getResponse() as { code?: string };
+    return (
+      GOOGLE_CALLBACK_ERROR_CODES.find((code) => code === body.code) ?? null
+    );
+  }
+
+  /** The `oauth_state` cookie's contents, with `next` re-checked (it came back from the browser), or null when missing or not ours. */
+  private readOAuthState(raw: string | undefined): OAuthState | null {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as Partial<OAuthState> | null;
+      if (typeof parsed?.state !== 'string') return null;
+      return { state: parsed.state, next: getSameSitePath(parsed.next) };
+    } catch {
+      return null;
+    }
   }
 
   /** Sets the httpOnly session cookie for the whole site. */
