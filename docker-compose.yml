@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     ports:
       # Host 5434: 5432/5433 are taken by native Windows PostgreSQL 16/17 services.
-      - "5434:5432"
+      - '5434:5432'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d nextgen_grader"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d nextgen_grader']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -23,12 +23,12 @@ services:
     container_name: redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "redis"]
+      - '6379:6379'
+    command: ['redis-server', '--appendonly', 'yes', '--requirepass', 'redis']
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "redis", "ping"]
+      test: ['CMD', 'redis-cli', '--no-auth-warning', '-a', 'redis', 'ping']
       interval: 5s
       timeout: 5s
       retries: 10

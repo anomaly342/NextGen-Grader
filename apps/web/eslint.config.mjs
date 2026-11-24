@@ -1,11 +1,11 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import { defineConfig, globalIgnores } from 'eslint/config';
+import nextVitals from 'eslint-config-next/core-web-vitals';
+import nextTs from 'eslint-config-next/typescript';
 import {
   ERROR_CODE_COMPARISON,
   NAMED_PROPS_TYPE,
   UI_COMPONENTS_IMPORT,
-} from "../../eslint.shared.mjs";
+} from '../../eslint.shared.mjs';
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -19,32 +19,36 @@ const eslintConfig = defineConfig([
   },
   {
     // Typed linting for app code only: root .mjs files are not in tsconfig.
-    files: ["src/**/*.{ts,tsx}"],
+    files: ['src/**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: { projectService: true },
     },
-    rules: { "@typescript-eslint/no-deprecated": "error" },
+    rules: { '@typescript-eslint/no-deprecated': 'error' },
   },
   {
     rules: {
-      "no-restricted-imports": ["error", { patterns: [UI_COMPONENTS_IMPORT] }],
-      "no-restricted-syntax": ["error", ERROR_CODE_COMPARISON],
+      'no-restricted-imports': ['error', { patterns: [UI_COMPONENTS_IMPORT] }],
+      'no-restricted-syntax': ['error', ERROR_CODE_COMPARISON],
     },
   },
   {
     // A later no-restricted-syntax replaces the earlier one, so repeat the shared entry.
-    files: ["**/*.tsx"],
+    files: ['**/*.tsx'],
     rules: {
-      "no-restricted-syntax": ["error", ERROR_CODE_COMPARISON, NAMED_PROPS_TYPE],
+      'no-restricted-syntax': [
+        'error',
+        ERROR_CODE_COMPARISON,
+        NAMED_PROPS_TYPE,
+      ],
     },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
+    '.next/**',
+    'out/**',
+    'build/**',
+    'next-env.d.ts',
   ]),
 ]);
 

@@ -26,7 +26,8 @@ export const ERROR_CODE_PROPERTY = {
 export const NAMED_PROPS_TYPE = {
   selector:
     'TSInterfaceDeclaration[id.name=/Props$/], TSTypeAliasDeclaration[id.name=/Props$/]',
-  message: 'Write component props inline in the signature: ({ a }: { a: string }).',
+  message:
+    'Write component props inline in the signature: ({ a }: { a: string }).',
 };
 
 /** `@repo/ui/components/button` instead of `@repo/ui/button`. */

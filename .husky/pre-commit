@@ -5,6 +5,12 @@
 staged=$(git diff --cached --name-only --diff-filter=ACMRD)
 filters=""
 
+# Formatting: only the staged files, so files nobody touched never block a commit.
+# Runs before the workspace checks, so docs and .claude edits are checked too.
+git diff --cached --name-only --diff-filter=ACMR -z |
+  xargs -0 -r bunx prettier --check --ignore-unknown --no-error-on-unmatched-pattern ||
+  { echo "pre-commit: run 'bunx prettier --write' on the files above"; exit 1; }
+
 if echo "$staged" | grep -qE '^(package\.json|bun\.lock|turbo\.json)$'; then
   echo "pre-commit: root config staged, checking every workspace"
 else

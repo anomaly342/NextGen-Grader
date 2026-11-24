@@ -1,6 +1,6 @@
 ---
 paths:
-  - "packages/prisma/**"
+  - 'packages/prisma/**'
 ---
 
 # Database (packages/prisma, Prisma 8)

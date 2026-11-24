@@ -1,9 +1,9 @@
 ---
 paths:
-  - "apps/web/**/*.{ts,tsx,css}"
-  - "apps/exam/**/*.{ts,tsx,css}"
-  - "packages/ui/**/*.{ts,tsx,css}"
-  - "packages/lib/**/*.{ts,tsx}"
+  - 'apps/web/**/*.{ts,tsx,css}'
+  - 'apps/exam/**/*.{ts,tsx,css}'
+  - 'packages/ui/**/*.{ts,tsx,css}'
+  - 'packages/lib/**/*.{ts,tsx}'
 ---
 
 # Frontend
