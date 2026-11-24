@@ -63,27 +63,40 @@ See [ADR 0002](../../docs/adr/0002-two-next-apps-shared-client.md).
 
 ## Forms
 
-Reference implementation: `apps/web/src/components/setup/setup-card.tsx`. Use TanStack Form's own state for
-everything below; no hand-rolled validity or touched flags.
+Reference implementation: the form module in `apps/web/src/components/common/form/` plus one form using it,
+`apps/web/src/components/setup/setup-card.tsx`. Use TanStack Form's own state for everything below; no hand-rolled
+validity or touched flags.
 
-- Every form uses TanStack Form (`@tanstack/react-form`) with shadcn fields from `packages/ui`.
+- Every form uses TanStack Form (`@tanstack/react-form`) through a form hook made with TanStack's `createFormHook`
+  and the shared contexts in `src/contexts/form-context.ts`. Credential forms use `useCredentialForm` and
+  `withCredentialFieldGroup` from `components/common/form/credential-form.ts`; another kind of form (create
+  classroom) gets its own hook with its own field components, not more fields on the Credential one. Pass a
+  `formId` (`'setup'`, `'change-password'`); every input id is `<formId>-<field name>`, so two forms on one page
+  never share an id.
+- A form states its fields, its submit action and its layout. Every Credential input is one field component,
+  `CredentialField` (`components/common/form/credential-field.tsx`), rendered inside
+  `<form.AppField name="username">` as
+  `{(field) => <field.CredentialField label="Username" description={USERNAME_RULE_TEXT} … />}`. The form passes
+  `label`, the rule text as `description`, the input's `type`, `autoComplete`, `enterKeyHint="done"` on the last
+  input, and `inputClassName` (`font-mono` for usernames, a width cap). `NewPasswordFields` (`new-password-fields.tsx`)
+  is the field group for a new password and its confirmation; map the form's names with
+  `fields={{ password: 'newPassword', confirmPassword: 'confirmPassword' }}`.
+- `CredentialField` owns all field-error behaviour; never copy it into a form:
+  - the error shows once the User changed the field and left it, or after a submit attempt, then updates live;
+  - `aria-invalid`, `data-invalid` and `aria-describedby` (error first, then the rule text) follow the same condition;
+  - one error, alert icon with bold 13px text;
+  - a submit error clears when the User types, and the input takes focus when one arrives;
+  - the rule text, when given, is always shown; pass it for username and new-password inputs.
 - Validation is one form-level `validators.onChange` returning `{ fields: { <name>: text | undefined } }`, so every
   change checks every field (a field-level validator only runs when its own field changes, leaving untouched fields
   "valid"), one line per field. For Credentials it calls the Credential rules in `@repo/lib/auth/credential-rules`
   (`getUsernameError`, `getPasswordError`, `getConfirmPasswordError`), which return the finished message or
   `undefined`. The API DTOs use the same module's constants.
-- A field shows `field.state.meta.errors` under its input when
-  `!meta.isValid && ((meta.isDirty && meta.isBlurred) || hasTriedSubmit)`, with
-  `hasTriedSubmit = useSelector(form.store, (s) => s.submissionAttempts > 0)` (`isShowingErrors` in
-  `apps/web/src/lib/field-errors.ts`). `aria-invalid`, `data-invalid` and `aria-describedby` follow the same condition.
-- Username and new-password inputs always show the rule text (`USERNAME_RULE_TEXT`, `PASSWORD_RULE_TEXT`) in a
-  `FieldDescription` with id `<inputId>-description`, and `aria-describedby={getDescribedBy(inputId, isShowing)}`
-  lists the error first. A field shows one error with `CredentialFieldError` from `components/common/` (alert icon, bold 13px text).
 - Submit button: `<form.Subscribe selector={(s) => s.isValid && !s.isPristine}>` → `disabled={!canSubmit || isBusy}`.
 - Read form state with `useSelector`, not the deprecated `useStore`.
-- Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) goes into that
-  field's `errorMap.onSubmit` via `form.setFieldMeta`, and the field's `listeners.onChange` clears it with
-  `setErrorMap({ onSubmit: undefined })`. Anything else shows above the form via `getErrorMessage(code)`.
+- Submit through a TanStack Query mutation. On `ApiError`, a code tied to one field (`USERNAME_TAKEN`) is one call:
+  `setSubmitError(form, 'username', getErrorMessage(error.code))`. Anything else shows above the form via
+  `getErrorMessage(code)`.
 
 ## Loading and errors
 
@@ -110,9 +123,9 @@ everything below; no hand-rolled validity or touched flags.
 
 ## Components
 
-- App code lives under `src/`: `src/app`, `src/components`, `src/hooks`, `src/lib`, `src/providers`, and
-  `src/proxy.ts`. Config files (`next.config.ts`, `tsconfig.json`, `eslint.config.mjs`) and `public/` stay at the app root.
-  `@/` points at `src/`.
+- App code lives under `src/`: `src/app`, `src/components`, `src/contexts`, `src/hooks`, `src/lib`,
+  `src/providers`, and `src/proxy.ts`. Config files (`next.config.ts`, `tsconfig.json`, `eslint.config.mjs`) and
+  `public/` stay at the app root. `@/` points at `src/`.
 - Pages are server components that render client components for interactive parts. Put `'use client'` on the
   smallest interactive piece.
 - Named exports. Kebab-case file and directory names (`auth-wizard/login-form.tsx`).

@@ -9,15 +9,13 @@ import {
 } from '@repo/lib/auth/credential-rules';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
-import { Field, FieldDescription, FieldLabel } from '@repo/ui/field';
-import { Input } from '@repo/ui/input';
 import { Spinner } from '@repo/ui/spinner';
-import { useForm, useSelector } from '@tanstack/react-form';
 import { CheckIcon, CircleAlertIcon } from 'lucide-react';
-import { useRef } from 'react';
-import { CredentialFieldError } from '@/components/common/credential-field-error';
+import {
+  setSubmitError,
+  useCredentialForm,
+} from '@/components/common/form/credential-form';
 import { useChangeUsername } from '@/hooks/use-change-username';
-import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
  * The `/account` change-username form: a new username with the Credential
@@ -31,11 +29,11 @@ export function ChangeUsernameForm({
   /** Id of the heading that names this form (the page has two). */
   labelledBy: string;
 }) {
-  const usernameInput = useRef<HTMLInputElement>(null);
   const { changeUsername, isPending, isSuccess, isError, error } =
     useChangeUsername();
 
-  const form = useForm({
+  const form = useCredentialForm({
+    formId: 'change-username',
     defaultValues: { username: '' },
     validators: {
       onChange: ({ value }) => ({
@@ -47,23 +45,10 @@ export function ChangeUsernameForm({
         onSuccess: () => form.reset(),
         onError: (error) => {
           if (error.code !== AUTH_ERROR_CODE.USERNAME_TAKEN) return;
-          // The username's onChange listener clears it.
-          form.setFieldMeta('username', (meta) => ({
-            ...meta,
-            errorMap: {
-              ...meta.errorMap,
-              onSubmit: getErrorMessage(error.code),
-            },
-          }));
-          // Focus reads the field's error out, through aria-describedby.
-          usernameInput.current?.focus();
+          setSubmitError(form, 'username', getErrorMessage(error.code));
         },
       }),
   });
-  const hasTriedSubmit = useSelector(
-    form.store,
-    (state) => state.submissionAttempts > 0,
-  );
 
   const hasFormError = isError && error !== AUTH_ERROR_CODE.USERNAME_TAKEN;
 
@@ -90,59 +75,21 @@ export function ChangeUsernameForm({
       </div>
 
       <div className="flex flex-col gap-5">
-        <form.Field
-          name="username"
-          listeners={{
-            // A new username drops the API's "taken" error for the old one.
-            onChange: ({ fieldApi }) =>
-              fieldApi.setErrorMap({ onSubmit: undefined }),
-          }}
-        >
-          {(field) => {
-            const isShowingFieldErrors = isShowingErrors(
-              field.state.meta,
-              hasTriedSubmit,
-            );
-            return (
-              <Field className="gap-2" data-invalid={isShowingFieldErrors}>
-                <FieldLabel
-                  htmlFor="account-username"
-                  className="font-semibold"
-                >
-                  New username
-                </FieldLabel>
-                <Input
-                  id="account-username"
-                  name={field.name}
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  enterKeyHint="done"
-                  maxLength={USERNAME_MAX_LENGTH}
-                  ref={usernameInput}
-                  aria-invalid={isShowingFieldErrors}
-                  aria-describedby={getDescribedBy(
-                    'account-username',
-                    isShowingFieldErrors,
-                  )}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  className="h-11 px-3 font-mono text-base md:max-w-90"
-                />
-                <FieldDescription id="account-username-description">
-                  {USERNAME_RULE_TEXT}
-                </FieldDescription>
-                {isShowingFieldErrors && (
-                  <CredentialFieldError id="account-username-error">
-                    {field.state.meta.errors.join(' ')}
-                  </CredentialFieldError>
-                )}
-              </Field>
-            );
-          }}
-        </form.Field>
+        <form.AppField name="username">
+          {(field) => (
+            <field.CredentialField
+              label="New username"
+              description={USERNAME_RULE_TEXT}
+              inputClassName="font-mono md:max-w-90"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="done"
+              maxLength={USERNAME_MAX_LENGTH}
+            />
+          )}
+        </form.AppField>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <form.Subscribe

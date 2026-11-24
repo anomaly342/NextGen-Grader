@@ -3,17 +3,13 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
-  PASSWORD_RULE_TEXT,
   getConfirmPasswordError,
   getPasswordError,
 } from '@repo/lib/auth/credential-rules';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
 import { Card, CardContent } from '@repo/ui/card';
-import { Field, FieldDescription, FieldLabel } from '@repo/ui/field';
-import { Input } from '@repo/ui/input';
 import { Spinner } from '@repo/ui/spinner';
-import { useForm, useSelector } from '@tanstack/react-form';
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -22,11 +18,11 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { CredentialFieldError } from '@/components/common/credential-field-error';
+import { useCredentialForm } from '@/components/common/form/credential-form';
+import { NewPasswordFields } from '@/components/common/form/new-password-fields';
 import { GoogleIcon } from '@/components/login/google-icon';
 import { useGoogleLogin } from '@/hooks/use-google-login';
 import { useResetPassword } from '@/hooks/use-reset-password';
-import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
  * The `/account/reset-password` card (Password reset): a new password with the
@@ -40,7 +36,8 @@ export function ResetPasswordCard() {
     useResetPassword();
   const { startGoogleLogin, isBusy: isGoogleBusy } = useGoogleLogin();
 
-  const form = useForm({
+  const form = useCredentialForm({
+    formId: 'reset',
     defaultValues: { newPassword: '', confirmPassword: '' },
     validators: {
       onChange: ({ value }) => ({
@@ -55,10 +52,6 @@ export function ResetPasswordCard() {
     },
     onSubmit: ({ value }) => resetPassword(value.newPassword),
   });
-  const hasTriedSubmit = useSelector(
-    form.store,
-    (state) => state.submissionAttempts > 0,
-  );
 
   if (isSuccess) {
     return (
@@ -143,88 +136,13 @@ export function ResetPasswordCard() {
         </div>
 
         <div className="flex flex-col gap-5">
-          <form.Field name="newPassword">
-            {(field) => {
-              const isShowingFieldErrors = isShowingErrors(
-                field.state.meta,
-                hasTriedSubmit,
-              );
-              return (
-                <Field className="gap-2" data-invalid={isShowingFieldErrors}>
-                  <FieldLabel
-                    htmlFor="reset-new-password"
-                    className="font-semibold"
-                  >
-                    New password
-                  </FieldLabel>
-                  <Input
-                    id="reset-new-password"
-                    name={field.name}
-                    type="password"
-                    autoComplete="new-password"
-                    aria-invalid={isShowingFieldErrors}
-                    aria-describedby={getDescribedBy(
-                      'reset-new-password',
-                      isShowingFieldErrors,
-                    )}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    className="h-11 px-3 text-base"
-                  />
-                  <FieldDescription id="reset-new-password-description">
-                    {PASSWORD_RULE_TEXT}
-                  </FieldDescription>
-                  {isShowingFieldErrors && (
-                    <CredentialFieldError id="reset-new-password-error">
-                      {field.state.meta.errors.join(' ')}
-                    </CredentialFieldError>
-                  )}
-                </Field>
-              );
+          <NewPasswordFields
+            form={form}
+            fields={{
+              password: 'newPassword',
+              confirmPassword: 'confirmPassword',
             }}
-          </form.Field>
-
-          <form.Field name="confirmPassword">
-            {(field) => {
-              const isShowingFieldErrors = isShowingErrors(
-                field.state.meta,
-                hasTriedSubmit,
-              );
-              return (
-                <Field className="gap-2" data-invalid={isShowingFieldErrors}>
-                  <FieldLabel
-                    htmlFor="reset-confirm-password"
-                    className="font-semibold"
-                  >
-                    Confirm new password
-                  </FieldLabel>
-                  <Input
-                    id="reset-confirm-password"
-                    name={field.name}
-                    type="password"
-                    autoComplete="new-password"
-                    enterKeyHint="done"
-                    aria-invalid={isShowingFieldErrors}
-                    aria-describedby={
-                      isShowingFieldErrors
-                        ? 'reset-confirm-password-error'
-                        : undefined
-                    }
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    className="h-11 px-3 text-base"
-                  />
-                  {isShowingFieldErrors && (
-                    <CredentialFieldError id="reset-confirm-password-error">
-                      {field.state.meta.errors.join(' ')}
-                    </CredentialFieldError>
-                  )}
-                </Field>
-              );
-            }}
-          </form.Field>
+          />
 
           <form.Subscribe
             selector={(state) => state.isValid && !state.isPristine}

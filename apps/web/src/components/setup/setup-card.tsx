@@ -16,22 +16,16 @@ import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Avatar, AvatarFallback } from '@repo/ui/avatar';
 import { Button } from '@repo/ui/button';
 import { Card, CardContent } from '@repo/ui/card';
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from '@repo/ui/field';
-import { Input } from '@repo/ui/input';
+import { FieldGroup } from '@repo/ui/field';
 import { Separator } from '@repo/ui/separator';
 import { Spinner } from '@repo/ui/spinner';
-import { useForm, useSelector } from '@tanstack/react-form';
 import { CircleAlertIcon } from 'lucide-react';
-import { useRef } from 'react';
-import { CredentialFieldError } from '@/components/common/credential-field-error';
+import {
+  setSubmitError,
+  useCredentialForm,
+} from '@/components/common/form/credential-form';
 import { useFinishSetup } from '@/hooks/use-finish-setup';
 import { useLogout } from '@/hooks/use-logout';
-import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
  * The `/setup` card (Credential setup): the signed-in University account with
@@ -48,12 +42,11 @@ export function SetupCard({
   /** Same-site path to land on after setup, already checked. */
   next: string | null;
 }) {
-  const usernameInput = useRef<HTMLInputElement>(null);
-
   const { logout, isBusy: isLoggingOut } = useLogout();
   const { finishSetup, isBusy, isError, error } = useFinishSetup(next);
 
-  const form = useForm({
+  const form = useCredentialForm({
+    formId: 'setup',
     defaultValues: { username: '', password: '', confirmPassword: '' },
     validators: {
       // Form-level, so every change checks every field: canSubmit then covers
@@ -75,24 +68,11 @@ export function SetupCard({
         {
           onError: (error) => {
             if (error.code !== AUTH_ERROR_CODE.USERNAME_TAKEN) return;
-            // Shown with the field's own errors; the username's onChange listener clears it.
-            form.setFieldMeta('username', (meta) => ({
-              ...meta,
-              errorMap: {
-                ...meta.errorMap,
-                onSubmit: getErrorMessage(error.code),
-              },
-            }));
-            // Focus reads the field's error out, through aria-describedby.
-            usernameInput.current?.focus();
+            setSubmitError(form, 'username', getErrorMessage(error.code));
           },
         },
       ),
   });
-  const hasTriedSubmit = useSelector(
-    form.store,
-    (state) => state.submissionAttempts > 0,
-  );
 
   const hasFormError = isError && error !== AUTH_ERROR_CODE.USERNAME_TAKEN;
 
@@ -159,147 +139,40 @@ export function SetupCard({
           </div>
 
           <FieldGroup className="gap-5">
-            <form.Field
-              name="username"
-              listeners={{
-                // A new username drops the API's "taken" error for the old one.
-                onChange: ({ fieldApi }) =>
-                  fieldApi.setErrorMap({ onSubmit: undefined }),
-              }}
-            >
+            <form.AppField name="username">
               {(field) => (
-                <Field
-                  className="gap-2"
-                  data-invalid={isShowingErrors(
-                    field.state.meta,
-                    hasTriedSubmit,
-                  )}
-                >
-                  <FieldLabel
-                    htmlFor="setup-username"
-                    className="font-semibold"
-                  >
-                    Username
-                  </FieldLabel>
-                  <Input
-                    id="setup-username"
-                    name={field.name}
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    maxLength={USERNAME_MAX_LENGTH}
-                    ref={usernameInput}
-                    aria-invalid={isShowingErrors(
-                      field.state.meta,
-                      hasTriedSubmit,
-                    )}
-                    aria-describedby={getDescribedBy(
-                      'setup-username',
-                      isShowingErrors(field.state.meta, hasTriedSubmit),
-                    )}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    className="h-11 px-3 font-mono text-base"
-                  />
-                  <FieldDescription id="setup-username-description">
-                    {USERNAME_RULE_TEXT}
-                  </FieldDescription>
-                  {isShowingErrors(field.state.meta, hasTriedSubmit) && (
-                    <CredentialFieldError id="setup-username-error">
-                      {field.state.meta.errors.join(' ')}
-                    </CredentialFieldError>
-                  )}
-                </Field>
+                <field.CredentialField
+                  label="Username"
+                  description={USERNAME_RULE_TEXT}
+                  inputClassName="font-mono"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={USERNAME_MAX_LENGTH}
+                />
               )}
-            </form.Field>
-
-            <form.Field name="password">
+            </form.AppField>
+            <form.AppField name="password">
               {(field) => (
-                <Field
-                  className="gap-2"
-                  data-invalid={isShowingErrors(
-                    field.state.meta,
-                    hasTriedSubmit,
-                  )}
-                >
-                  <FieldLabel
-                    htmlFor="setup-password"
-                    className="font-semibold"
-                  >
-                    Password
-                  </FieldLabel>
-                  <Input
-                    id="setup-password"
-                    name={field.name}
-                    type="password"
-                    autoComplete="new-password"
-                    aria-invalid={isShowingErrors(
-                      field.state.meta,
-                      hasTriedSubmit,
-                    )}
-                    aria-describedby={getDescribedBy(
-                      'setup-password',
-                      isShowingErrors(field.state.meta, hasTriedSubmit),
-                    )}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    className="h-11 px-3 text-base"
-                  />
-                  <FieldDescription id="setup-password-description">
-                    {PASSWORD_RULE_TEXT}
-                  </FieldDescription>
-                  {isShowingErrors(field.state.meta, hasTriedSubmit) && (
-                    <CredentialFieldError id="setup-password-error">
-                      {field.state.meta.errors.join(' ')}
-                    </CredentialFieldError>
-                  )}
-                </Field>
+                <field.CredentialField
+                  label="Password"
+                  description={PASSWORD_RULE_TEXT}
+                  type="password"
+                  autoComplete="new-password"
+                />
               )}
-            </form.Field>
-
-            <form.Field name="confirmPassword">
+            </form.AppField>
+            <form.AppField name="confirmPassword">
               {(field) => (
-                <Field
-                  className="gap-2"
-                  data-invalid={isShowingErrors(
-                    field.state.meta,
-                    hasTriedSubmit,
-                  )}
-                >
-                  <FieldLabel htmlFor="setup-confirm" className="font-semibold">
-                    Confirm password
-                  </FieldLabel>
-                  <Input
-                    id="setup-confirm"
-                    name={field.name}
-                    type="password"
-                    autoComplete="new-password"
-                    enterKeyHint="done"
-                    aria-invalid={isShowingErrors(
-                      field.state.meta,
-                      hasTriedSubmit,
-                    )}
-                    aria-describedby={
-                      isShowingErrors(field.state.meta, hasTriedSubmit)
-                        ? 'setup-confirm-error'
-                        : undefined
-                    }
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    className="h-11 px-3 text-base"
-                  />
-                  {isShowingErrors(field.state.meta, hasTriedSubmit) && (
-                    <CredentialFieldError id="setup-confirm-error">
-                      {field.state.meta.errors.join(' ')}
-                    </CredentialFieldError>
-                  )}
-                </Field>
+                <field.CredentialField
+                  label="Confirm password"
+                  type="password"
+                  autoComplete="new-password"
+                  enterKeyHint="done"
+                />
               )}
-            </form.Field>
+            </form.AppField>
 
             <form.Subscribe
               selector={(state) => state.isValid && !state.isPristine}

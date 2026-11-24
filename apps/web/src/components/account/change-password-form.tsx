@@ -3,21 +3,19 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
 import {
-  PASSWORD_RULE_TEXT,
   getConfirmPasswordError,
   getPasswordError,
 } from '@repo/lib/auth/credential-rules';
 import { Alert, AlertDescription } from '@repo/ui/alert';
 import { Button } from '@repo/ui/button';
-import { Field, FieldDescription, FieldLabel } from '@repo/ui/field';
-import { Input } from '@repo/ui/input';
 import { Spinner } from '@repo/ui/spinner';
-import { useForm, useSelector } from '@tanstack/react-form';
 import { CheckIcon, CircleAlertIcon } from 'lucide-react';
-import { useRef } from 'react';
-import { CredentialFieldError } from '@/components/common/credential-field-error';
+import {
+  setSubmitError,
+  useCredentialForm,
+} from '@/components/common/form/credential-form';
+import { NewPasswordFields } from '@/components/common/form/new-password-fields';
 import { useChangePassword } from '@/hooks/use-change-password';
-import { getDescribedBy, isShowingErrors } from '@/lib/field-errors';
 
 /**
  * The `/account` change-password form: current password, new password with
@@ -31,11 +29,11 @@ export function ChangePasswordForm({
   /** Id of the heading that names this form (the page has two). */
   labelledBy: string;
 }) {
-  const currentPasswordInput = useRef<HTMLInputElement>(null);
   const { changePassword, isPending, isSuccess, isError, error } =
     useChangePassword();
 
-  const form = useForm({
+  const form = useCredentialForm({
+    formId: 'change-password',
     defaultValues: {
       currentPassword: '',
       newPassword: '',
@@ -63,24 +61,15 @@ export function ChangePasswordForm({
           onSuccess: () => form.reset(),
           onError: (error) => {
             if (error.code !== AUTH_ERROR_CODE.INVALID_CREDENTIALS) return;
-            // The current password's onChange listener clears it.
-            form.setFieldMeta('currentPassword', (meta) => ({
-              ...meta,
-              errorMap: {
-                ...meta.errorMap,
-                onSubmit: WRONG_CURRENT_PASSWORD_MESSAGE,
-              },
-            }));
-            // Focus reads the field's error out, through aria-describedby.
-            currentPasswordInput.current?.focus();
+            setSubmitError(
+              form,
+              'currentPassword',
+              WRONG_CURRENT_PASSWORD_MESSAGE,
+            );
           },
         },
       ),
   });
-  const hasTriedSubmit = useSelector(
-    form.store,
-    (state) => state.submissionAttempts > 0,
-  );
 
   const hasFormError = isError && error !== AUTH_ERROR_CODE.INVALID_CREDENTIALS;
 
@@ -107,136 +96,24 @@ export function ChangePasswordForm({
       </div>
 
       <div className="flex flex-col gap-5">
-        <form.Field
-          name="currentPassword"
-          listeners={{
-            // A changed password drops the API's "wrong" error for the old one.
-            onChange: ({ fieldApi }) =>
-              fieldApi.setErrorMap({ onSubmit: undefined }),
+        <form.AppField name="currentPassword">
+          {(field) => (
+            <field.CredentialField
+              label="Current password"
+              inputClassName="md:max-w-90"
+              type="password"
+              autoComplete="current-password"
+            />
+          )}
+        </form.AppField>
+        <NewPasswordFields
+          form={form}
+          fields={{
+            password: 'newPassword',
+            confirmPassword: 'confirmPassword',
           }}
-        >
-          {(field) => {
-            const isShowingFieldErrors = isShowingErrors(
-              field.state.meta,
-              hasTriedSubmit,
-            );
-            return (
-              <Field className="gap-2" data-invalid={isShowingFieldErrors}>
-                <FieldLabel
-                  htmlFor="account-current-password"
-                  className="font-semibold"
-                >
-                  Current password
-                </FieldLabel>
-                <Input
-                  id="account-current-password"
-                  name={field.name}
-                  type="password"
-                  autoComplete="current-password"
-                  ref={currentPasswordInput}
-                  aria-invalid={isShowingFieldErrors}
-                  aria-describedby={
-                    isShowingFieldErrors
-                      ? 'account-current-password-error'
-                      : undefined
-                  }
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  className="h-11 px-3 text-base md:max-w-90"
-                />
-                {isShowingFieldErrors && (
-                  <CredentialFieldError id="account-current-password-error">
-                    {field.state.meta.errors.join(' ')}
-                  </CredentialFieldError>
-                )}
-              </Field>
-            );
-          }}
-        </form.Field>
-
-        <form.Field name="newPassword">
-          {(field) => {
-            const isShowingFieldErrors = isShowingErrors(
-              field.state.meta,
-              hasTriedSubmit,
-            );
-            return (
-              <Field className="gap-2" data-invalid={isShowingFieldErrors}>
-                <FieldLabel
-                  htmlFor="account-new-password"
-                  className="font-semibold"
-                >
-                  New password
-                </FieldLabel>
-                <Input
-                  id="account-new-password"
-                  name={field.name}
-                  type="password"
-                  autoComplete="new-password"
-                  aria-invalid={isShowingFieldErrors}
-                  aria-describedby={getDescribedBy(
-                    'account-new-password',
-                    isShowingFieldErrors,
-                  )}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  className="h-11 px-3 text-base md:max-w-90"
-                />
-                <FieldDescription id="account-new-password-description">
-                  {PASSWORD_RULE_TEXT}
-                </FieldDescription>
-                {isShowingFieldErrors && (
-                  <CredentialFieldError id="account-new-password-error">
-                    {field.state.meta.errors.join(' ')}
-                  </CredentialFieldError>
-                )}
-              </Field>
-            );
-          }}
-        </form.Field>
-
-        <form.Field name="confirmPassword">
-          {(field) => {
-            const isShowingFieldErrors = isShowingErrors(
-              field.state.meta,
-              hasTriedSubmit,
-            );
-            return (
-              <Field className="gap-2" data-invalid={isShowingFieldErrors}>
-                <FieldLabel
-                  htmlFor="account-confirm-password"
-                  className="font-semibold"
-                >
-                  Confirm new password
-                </FieldLabel>
-                <Input
-                  id="account-confirm-password"
-                  name={field.name}
-                  type="password"
-                  autoComplete="new-password"
-                  enterKeyHint="done"
-                  aria-invalid={isShowingFieldErrors}
-                  aria-describedby={
-                    isShowingFieldErrors
-                      ? 'account-confirm-password-error'
-                      : undefined
-                  }
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  className="h-11 px-3 text-base md:max-w-90"
-                />
-                {isShowingFieldErrors && (
-                  <CredentialFieldError id="account-confirm-password-error">
-                    {field.state.meta.errors.join(' ')}
-                  </CredentialFieldError>
-                )}
-              </Field>
-            );
-          }}
-        </form.Field>
+          inputClassName="md:max-w-90"
+        />
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <form.Subscribe
