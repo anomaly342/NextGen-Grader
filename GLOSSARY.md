@@ -31,6 +31,10 @@ _Avoid_: Registration, onboarding, sign-up
 A User's username and password, usable as an alternative to signing in with their University account. The username is a sign-in handle only; it is never how a User is shown to others.
 _Avoid_: Login, handle
 
+**Credential rules**:
+The requirements a username and password must meet, the same in Credential setup, a username or password change and Password reset. The server enforces them whatever the browser shows.
+_Avoid_: Password policy, validation rules
+
 **Password reset**:
 Choosing a new password without the current one. Allowed only shortly after signing in with the University account, which is how a User proves who they are when they have forgotten their password.
 _Avoid_: Forgot password, password recovery
