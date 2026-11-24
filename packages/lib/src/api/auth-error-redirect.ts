@@ -1,5 +1,5 @@
 import { AUTH_ERROR_CODE } from '../auth/error-codes.ts';
-import { getSameSitePath } from '../auth/next-path.ts';
+import { LOGIN_PATH, SETUP_PATH, withNext } from '../auth/next-path.ts';
 import { ApiError } from './api-error.ts';
 
 /** The part of a TanStack QueryClient this needs. */
@@ -8,11 +8,7 @@ interface ClearableCache {
 }
 
 /** The part of `window.location` this needs. */
-interface BrowserLocation {
-  pathname: string;
-  search: string;
-  assign(url: string): void;
-}
+type BrowserLocation = Pick<Location, 'pathname' | 'search' | 'assign'>;
 
 /**
  * The one place the browser handles auth errors. Wire it into the QueryClient's
@@ -32,14 +28,14 @@ export function redirectOnAuthError(
   if (!(error instanceof ApiError)) return false;
   if (error.status === 401 && error.code === AUTH_ERROR_CODE.NOT_SIGNED_IN) {
     queryClient.clear();
-    goTo('/login', location);
+    goTo(LOGIN_PATH, location);
     return true;
   }
   if (
     error.status === 403 &&
     error.code === AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED
   ) {
-    goTo('/setup', location);
+    goTo(SETUP_PATH, location);
     return true;
   }
   return false;
@@ -51,8 +47,5 @@ export function redirectOnAuthError(
  */
 function goTo(page: string, location: BrowserLocation): void {
   if (location.pathname === page) return;
-  const next = getSameSitePath(`${location.pathname}${location.search}`);
-  location.assign(
-    next ? `${page}?${new URLSearchParams({ next }).toString()}` : page,
-  );
+  location.assign(withNext(page, `${location.pathname}${location.search}`));
 }

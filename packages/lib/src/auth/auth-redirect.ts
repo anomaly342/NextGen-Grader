@@ -1,5 +1,5 @@
 import type { ModelRow } from '@repo/prisma';
-import { getSameSitePath } from './next-path.ts';
+import { HOME_PATH, LOGIN_PATH, SETUP_PATH, withNext } from './next-path.ts';
 
 /** What the proxy knows about the signed-in User (from `GET /auth/me`). */
 type SignedInUser = Pick<ModelRow<'User'>, 'role' | 'credentialsSetAt'>;
@@ -34,10 +34,6 @@ export function getAuthRedirect({
   return null;
 }
 
-const HOME_PATH = '/';
-const LOGIN_PATH = '/login';
-const SETUP_PATH = '/setup';
-
 /** Where `/` takes a User. Everyone lands on `/classrooms` until Teacher routes are decided. */
 function getLandingPath(role: SignedInUser['role']): string {
   switch (role) {
@@ -45,12 +41,4 @@ function getLandingPath(role: SignedInUser['role']): string {
     case 'TEACHER':
       return '/classrooms';
   }
-}
-
-/** `page?next=<next>`, or just `page` when `next` is not a same-site path. */
-function withNext(page: string, next: string | null): string {
-  const safeNext = getSameSitePath(next);
-  return safeNext
-    ? `${page}?${new URLSearchParams({ next: safeNext }).toString()}`
-    : page;
 }

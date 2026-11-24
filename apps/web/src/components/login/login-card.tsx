@@ -19,7 +19,7 @@ import { CircleAlertIcon, ClockIcon } from 'lucide-react';
 import { useRef } from 'react';
 import { useCountdown } from '@/hooks/use-countdown';
 import { useGoogleLogin } from '@/hooks/use-google-login';
-import { getRetryAfterSeconds, useLogin } from '@/hooks/use-login';
+import { useLogin } from '@/hooks/use-login';
 import { GoogleIcon } from './google-icon';
 
 /**
@@ -57,8 +57,12 @@ export function LoginCard({
           if (error.code === AUTH_ERROR_CODE.INVALID_CREDENTIALS) {
             passwordInput.current?.focus();
           }
-          const seconds = getRetryAfterSeconds(error);
-          if (seconds !== null) startCountdown(seconds);
+          if (
+            error.code === AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS &&
+            error.retryAfterSec !== null
+          ) {
+            startCountdown(Math.ceil(error.retryAfterSec));
+          }
         },
       }),
   });

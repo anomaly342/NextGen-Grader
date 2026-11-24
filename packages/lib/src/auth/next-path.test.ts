@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { getSameSitePath } from './next-path.ts';
+import {
+  getSameSitePath,
+  LOGIN_PATH,
+  NEXT_PATH_MAX_LENGTH,
+  SETUP_PATH,
+  withNext,
+} from './next-path.ts';
 
 describe('getSameSitePath', () => {
   test('keeps a same-site relative path, with its query', () => {
@@ -39,5 +45,27 @@ describe('getSameSitePath', () => {
     expect(getSameSitePath(undefined)).toBeNull();
     expect(getSameSitePath(null)).toBeNull();
     expect(getSameSitePath(['/a', '/b'])).toBeNull();
+  });
+});
+
+describe('withNext', () => {
+  test('adds a same-site next, encoded', () => {
+    expect(withNext(LOGIN_PATH, '/problems/1?tab=statement')).toBe(
+      '/login?next=%2Fproblems%2F1%3Ftab%3Dstatement',
+    );
+  });
+
+  test('gives just the page for an off-site next', () => {
+    expect(withNext(SETUP_PATH, '//evil.com')).toBe('/setup');
+  });
+
+  test('gives just the page for an over-long next', () => {
+    expect(withNext(LOGIN_PATH, '/' + 'a'.repeat(NEXT_PATH_MAX_LENGTH))).toBe(
+      '/login',
+    );
+  });
+
+  test('gives just the page for a null next', () => {
+    expect(withNext(LOGIN_PATH, null)).toBe('/login');
   });
 });

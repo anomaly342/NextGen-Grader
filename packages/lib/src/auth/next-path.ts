@@ -1,3 +1,10 @@
+/** The sign-in page. */
+export const LOGIN_PATH = '/login';
+/** The Credential setup page. */
+export const SETUP_PATH = '/setup';
+/** The home page; the proxy sends it on to the User's landing page. */
+export const HOME_PATH = '/';
+
 /** Longest `next` path kept; longer ones are dropped. */
 export const NEXT_PATH_MAX_LENGTH = 2048;
 
@@ -19,4 +26,15 @@ export function getSameSitePath(next: unknown): string | null {
     return null;
   }
   return SAME_SITE_PATH_PATTERN.test(next) ? next : null;
+}
+
+/**
+ * `page?next=<next>`, or just `page` when `next` is not a same-site path. The
+ * one builder of `next=` URLs, so no caller can skip the same-site check.
+ */
+export function withNext(page: string, next: string | null): string {
+  const safeNext = getSameSitePath(next);
+  return safeNext
+    ? `${page}?${new URLSearchParams({ next: safeNext }).toString()}`
+    : page;
 }

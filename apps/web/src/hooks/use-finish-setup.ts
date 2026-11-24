@@ -3,6 +3,7 @@
 import { getAuthErrorCode, type ApiError } from '@repo/lib/api/api-error';
 import { apiRequest } from '@repo/lib/api/browser-client';
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
+import { HOME_PATH } from '@repo/lib/auth/next-path';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getUsernameAvailabilityKey } from './use-check-username';
@@ -24,7 +25,7 @@ export function useFinishSetup(next: string | null) {
   >({
     mutationFn: (values) =>
       apiRequest('/auth/setup', { method: 'POST', body: values }),
-    onSuccess: () => router.replace(next ?? '/'),
+    onSuccess: () => router.replace(next ?? HOME_PATH),
     onError: (mutationError, values) => {
       if (mutationError.code !== AUTH_ERROR_CODE.USERNAME_TAKEN) return;
       queryClient.removeQueries({
