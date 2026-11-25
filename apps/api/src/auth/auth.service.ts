@@ -7,8 +7,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
-import { BcryptService } from '@/bcrypt/bcrypt.service';
 import { ClockService } from '@/clock/clock.service';
+import { HashingService } from '@/hashing/hashing.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { SessionPayload } from '@/sessions/interfaces/session-payload.interface';
 import { SessionRecord } from '@/sessions/interfaces/session-record.interface';
@@ -17,7 +17,6 @@ import { SessionsService } from '@/sessions/sessions.service';
 import {
   ALLOWED_EMAIL_DOMAINS,
   GOOGLE_HD_HINT,
-  DUMMY_PASSWORD_HASH,
   GOOGLE_SCOPES,
   PASSWORD_RESET_WINDOW_MS,
   PG_UNIQUE_VIOLATION,
@@ -38,8 +37,8 @@ export class AuthService {
     private readonly googleOAuthService: GoogleOAuthService,
     private readonly prismaService: PrismaService,
     private readonly sessionsService: SessionsService,
-    private readonly bcryptService: BcryptService,
     private readonly clockService: ClockService,
+    private readonly hashingService: HashingService,
   ) {}
 
   /** Returns the Google consent-screen URL carrying `state`. */
@@ -70,7 +69,7 @@ export class AuthService {
     session: SessionPayload,
     { username, password }: SetupCredentialsDto,
   ): Promise<LoginResult> {
-    const passwordHash = await this.bcryptService.hash(password);
+    const passwordHash = await this.hashingService.hash(password);
     const user = await this.claimCredentials(
       session.id,
       username,
@@ -110,13 +109,11 @@ export class AuthService {
         'passwordHash',
       )
       .first();
-    // Missing user (or no hash yet) still runs bcrypt against a fixed hash, so
-    // unknown usernames take the same time as a wrong password.
-    const isPasswordValid = await this.bcryptService.verify(
+    const isPasswordValid = await this.hashingService.verify(
       password,
-      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+      user?.passwordHash ?? null,
     );
-    if (!user?.passwordHash || !isPasswordValid) {
+    if (!user || !isPasswordValid) {
       throw new UnauthorizedException({
         code: AUTH_ERROR_CODE.INVALID_CREDENTIALS,
         message: 'Wrong username or password',
@@ -191,11 +188,11 @@ export class AuthService {
     const user = await this.prismaService.User.where({ id: userId })
       .select('passwordHash')
       .first();
-    const isCurrentPasswordValid = await this.bcryptService.verify(
+    const isCurrentPasswordValid = await this.hashingService.verify(
       currentPassword,
-      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+      user?.passwordHash ?? null,
     );
-    if (!user?.passwordHash || !isCurrentPasswordValid) {
+    if (!isCurrentPasswordValid) {
       throw new UnauthorizedException({
         code: AUTH_ERROR_CODE.INVALID_CREDENTIALS,
         message: 'Wrong password',
@@ -234,7 +231,7 @@ export class AuthService {
     password: string,
   ): Promise<void> {
     await this.prismaService.User.where({ id: userId }).update({
-      passwordHash: await this.bcryptService.hash(password),
+      passwordHash: await this.hashingService.hash(password),
     });
   }
 

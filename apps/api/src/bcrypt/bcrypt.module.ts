@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BcryptService } from './bcrypt.service';
 
-/** Password hashing. Import this module where BcryptService is needed. */
+/** Raw bcrypt. Only HashingModule imports this; everything else uses HashingService. */
 @Module({
   providers: [BcryptService],
   exports: [BcryptService],

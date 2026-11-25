@@ -54,13 +54,6 @@ export const BASE_COOKIE_OPTIONS: CookieOptions = {
 /** How long after a Google sign-in a forgotten-password reset is allowed. */
 export const PASSWORD_RESET_WINDOW_MS = 10 * 60 * 1000;
 
-/**
- * bcrypt hash of a random throwaway password. Login verifies against it when the
- * username doesn't exist, so unknown and known usernames take the same time.
- */
-export const DUMMY_PASSWORD_HASH =
-  '$2b$12$Y0Cyom8xEvoEqwpOrPqaAODanvtJD0tpqyy.WSqSrJcLXKo8aXFwi';
-
 /** Postgres error for a unique-constraint violation, and the constraint on User.username. */
 export const PG_UNIQUE_VIOLATION = '23505';
 export const USERNAME_UNIQUE_CONSTRAINT = 'User_username_key';

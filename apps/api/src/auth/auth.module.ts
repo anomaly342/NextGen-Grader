@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
-import { BcryptModule } from '@/bcrypt/bcrypt.module';
+import { HashingModule } from '@/hashing/hashing.module';
 import { SessionsModule } from '@/sessions/sessions.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -10,7 +10,7 @@ import { AuthService } from './auth.service';
  * (`<web host>/api/auth/google/callback`, through the web host's `/api` rewrite).
  */
 @Module({
-  imports: [SessionsModule, BcryptModule],
+  imports: [SessionsModule, HashingModule],
   controllers: [AuthController],
   providers: [
     AuthService,

@@ -5,12 +5,11 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
-import { BcryptService } from '@/bcrypt/bcrypt.service';
 import { ClockService } from '@/clock/clock.service';
+import { HashingService } from '@/hashing/hashing.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import type { SessionPayload } from '@/sessions/interfaces/session-payload.interface';
 import { SessionsService } from '@/sessions/sessions.service';
-import { DUMMY_PASSWORD_HASH } from './auth.constants';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
@@ -66,7 +65,7 @@ describe('AuthService', () => {
   >;
   let mockCreateSession: jest.Mock;
   let mockDestroySession: jest.Mock;
-  let mockBcrypt: { hash: jest.Mock; verify: jest.Mock };
+  let mockHashing: { hash: jest.Mock; verify: jest.Mock };
 
   beforeEach(async () => {
     mockGoogle = {
@@ -89,7 +88,7 @@ describe('AuthService', () => {
     };
     mockCreateSession = jest.fn().mockResolvedValue('cookie-id');
     mockDestroySession = jest.fn().mockResolvedValue(undefined);
-    mockBcrypt = {
+    mockHashing = {
       hash: jest.fn().mockResolvedValue('$2b$12$hash'),
       verify: jest.fn().mockResolvedValue(true),
     };
@@ -105,7 +104,7 @@ describe('AuthService', () => {
             destroySession: mockDestroySession,
           },
         },
-        { provide: BcryptService, useValue: mockBcrypt },
+        { provide: HashingService, useValue: mockHashing },
         ClockService,
       ],
     }).compile();
@@ -241,7 +240,7 @@ describe('AuthService', () => {
         cookieId: 'cookie-id',
         user: expectedUser,
       });
-      expect(mockBcrypt.hash).toHaveBeenCalledWith('password123');
+      expect(mockHashing.hash).toHaveBeenCalledWith('password123');
       expect(mockUser.update).toHaveBeenCalledWith(
         expect.objectContaining({
           username: 'somchai_k',
@@ -322,7 +321,7 @@ describe('AuthService', () => {
     });
 
     it('401 INVALID_CREDENTIALS for a wrong password', async () => {
-      mockBcrypt.verify.mockResolvedValue(false);
+      mockHashing.verify.mockResolvedValue(false);
       const actualError = await service
         .loginWithPassword(inputBody)
         .catch((error: unknown) => error);
@@ -333,20 +332,18 @@ describe('AuthService', () => {
       expect(mockCreateSession).not.toHaveBeenCalled();
     });
 
-    it('same 401 for an unknown username, still running bcrypt (no timing leak)', async () => {
+    it('same 401 for an unknown username, still verifying a missing hash (no timing leak)', async () => {
       mockUser.first.mockResolvedValue(null);
-      mockBcrypt.verify.mockResolvedValue(false);
+      mockHashing.verify.mockResolvedValue(false);
       await expect(service.loginWithPassword(inputBody)).rejects.toBeInstanceOf(
         UnauthorizedException,
       );
-      expect(mockBcrypt.verify).toHaveBeenCalledWith(
-        'password123',
-        DUMMY_PASSWORD_HASH,
-      );
+      expect(mockHashing.verify).toHaveBeenCalledWith('password123', null);
     });
 
     it('401 for a Google-only user who never set a password', async () => {
       mockUser.first.mockResolvedValue({ ...inputUserRow, passwordHash: null });
+      mockHashing.verify.mockResolvedValue(false);
       await expect(service.loginWithPassword(inputBody)).rejects.toBeInstanceOf(
         UnauthorizedException,
       );
