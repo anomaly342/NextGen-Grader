@@ -1,40 +1,43 @@
 # NextGen Grader: project context
 
-NextGen Grader is a university programming judge. Students upload `.cpp` files, a sandboxed worker
-compiles and runs them against test cases, and the result comes back live. On top of judging it has:
-classrooms with sections, three grading modes, Elo-based practice recommendations, an LLM debugging
-chatbot, an exam mode with separate exam accounts, Dolos plagiarism checks (exams only), and LLM
-problem drafting.
+NextGen Grader is a university programming judge. Students upload `.cpp` files, a sandboxed worker compiles and runs
+them against test cases, and the result comes back live. On top of judging it has: classrooms with sections, three
+grading modes, Elo-based practice recommendations, an LLM debugging chatbot, an exam mode with separate exam accounts,
+Dolos plagiarism checks (exams only), and LLM problem drafting.
 
 ## Repo layout (Turborepo, Bun)
 
 - `apps/web`: Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Socket.IO client
 - `apps/api`: NestJS, TypeScript, BullMQ, Socket.IO, Prisma client
-- `packages/prisma` (`@repo/prisma`): the single Prisma 8 contract (`src/prisma/contract.prisma`) and client, shared by both apps
+- `packages/prisma` (`@repo/prisma`): the single Prisma 8 contract (`src/prisma/contract.prisma`) and client, shared by
+  both apps
 - The CMS Worker (compile/run sandbox using isolate) runs in a separate Linux VM, not in this repo's Docker setup
-- Ollama runs Gemma 4 31B locally. Redis holds BullMQ queues and sessions. PostgreSQL holds everything else,
-  including file bytes (`fsobjects`, addressed by SHA-1)
-- Deployment (proxy chain, API instance count): `docs/ops/deployment.md`. Read it before touching anything
-  keyed by client IP or held in process memory (rate limits, caches)
+- Ollama runs Gemma 4 31B locally. Redis holds BullMQ queues and sessions. PostgreSQL holds everything else, including
+  file bytes (`fsobjects`, addressed by SHA-1)
+- Deployment (proxy chain, API instance count): `docs/ops/deployment.md`. Read it before touching anything keyed by
+  client IP or held in process memory (rate limits, caches)
+- During iteration, run scoped checks (e.g. `bunx turbo check-types lint --filter=web`) and run the full monorepo suite
+  once before finishing
 
 ## Hard constraints
 
-- Student code and chat must never leave our servers. Never add calls to external AI APIs, external
-  plagiarism services (e.g. MOSS) or third-party code-analysis services.
+- Student code and chat must never leave our servers. Never add calls to external AI APIs, external plagiarism services
+  (e.g. MOSS) or third-party code-analysis services.
 - Students submit in exactly one language per classroom (`Classroom.language`, default C++17).
 - Time checks (deadlines, exam windows) always use the server clock, never the client's.
-- Limits that matter for fairness (submission counts, exam chat counts) are enforced in SQL with
-  conditional updates, not only in application code or the UI.
+- Limits that matter for fairness (submission counts, exam chat counts) are enforced in SQL with conditional updates,
+  not only in application code or the UI.
 
 ## Domain vocabulary (use these exact names)
 
 - **Classroom** has many **Sections**; students join a section with a 5-character `joinCode` (**Enrollment**).
-- **ClassroomTeacher**: who teaches a classroom. **ExamStaff**: who runs a given exam (may be from outside the classroom).
+- **ClassroomTeacher**: who teaches a classroom. **ExamStaff**: who runs a given exam (may be from outside the
+  classroom).
 - **Problem** belongs to a classroom's bank. `kind` is `MANDATORY` or `OPTIONAL`. `examId` set = exam-only problem.
-- **SectionProblem**: a problem assigned to a section, with `opensAt`, `lateAfter`, `canSubmitUntil`,
-  `latePenaltyPct`, `maxSubmissions`.
-- **Testcase**: `isSample` (shown with statement), `isHidden` (verdict only), `weight` (share of `maxScore`).
-  A test case cannot be both sample and hidden. Any testcase change bumps `Problem.testsVersion`.
+- **SectionProblem**: a problem assigned to a section, with `opensAt`, `lateAfter`, `canSubmitUntil`, `latePenaltyPct`,
+  `maxSubmissions`.
+- **Testcase**: `isSample` (shown with statement), `isHidden` (verdict only), `weight` (share of `maxScore`). A test
+  case cannot be both sample and hidden. Any testcase change bumps `Problem.testsVersion`.
 - **Submission** has exactly one of `sectionProblemId` or `examineeId`. **Result** is one row per testcase.
 - **ProblemProgress**: per user per problem (`attempts`, `bestScore`, `solvedAt`, `solvedOnAttempt`, `cooldownSince`).
 - **StudentSkill**: Elo `rating` per user, classroom and tag, with `ratedCount`.
@@ -44,8 +47,10 @@ problem drafting.
 
 ## Grading modes (`Classroom.gradingMode`)
 
-- `ALL_MANDATORY`: every problem is mandatory; `mandatoryPoints` (e.g. 15) is the whole score. No optional problems allowed.
-- `MANDATORY_AND_OPTIONAL`: total = `mandatoryPoints` + `optionalPoints`; the optional part is earned against `optionalTarget`.
+- `ALL_MANDATORY`: every problem is mandatory; `mandatoryPoints` (e.g. 15) is the whole score. No optional problems
+  allowed.
+- `MANDATORY_AND_OPTIONAL`: total = `mandatoryPoints` + `optionalPoints`; the optional part is earned against
+  `optionalTarget`.
 - `MANDATORY_AND_BONUS`: `mandatoryPoints` is the total; `optionalPoints` is a separate bonus on top.
 - `optionalPartial = true`: below target earns a proportional share. `false`: 0 until the target is reached.
 
@@ -53,18 +58,19 @@ problem drafting.
 
 - Expected chance `E = 1 / (1 + 10^((D - S) / 400))`, S = student tag rating, D = problem rating.
 - Recommend the top 3 closest to E = 0.65; ties go to the student's weaker tag.
-- Score R from the first judged solve: try 1 = 1.0, try 2 = 0.7, try 3 = 0.4, three fails = 0.
-  Compile errors do not count as tries. Each problem is rated once per student.
+- Score R from the first judged solve: try 1 = 1.0, try 2 = 0.7, try 3 = 0.4, three fails = 0. Compile errors do not
+  count as tries. Each problem is rated once per student.
 - `S' = S + 32 (R - E)`; `D' = D - K (R - E)` with K = 32 for the problem's first 10 rated students, then 16.
 - New optional problems start at 1000 / 1200 / 1400 for EASY / MEDIUM / HARD. Changing test cases resets the rating.
-- Cooldown: a problem failed 3 times (`cooldownSince` set) is not recommended again until the student has
-  solved 2 other problems in the same tag, or 3 days have passed.
-- Skill level is derived, not stored: `ratedCount < 3` = NOT_ENOUGH_DATA, rating < 1150 WEAK, < 1300 DEVELOPING, else STRONG.
+- Cooldown: a problem failed 3 times (`cooldownSince` set) is not recommended again until the student has solved 2 other
+  problems in the same tag, or 3 days have passed.
+- Skill level is derived, not stored: `ratedCount < 3` = NOT_ENOUGH_DATA, rating < 1150 WEAK, < 1300 DEVELOPING, else
+  STRONG.
 
 ## Chatbot
 
-- Lab chat: helps debug. It may fix trivial bugs (typos, missing semicolons, wrong format) but for logic bugs it
-  asks guiding questions instead of giving the answer. A code filter strips full solutions from replies;
-  keep the unfiltered text in `rawContent` when the filter changed something.
+- Lab chat: helps debug. It may fix trivial bugs (typos, missing semicolons, wrong format) but for logic bugs it asks
+  guiding questions instead of giving the answer. A code filter strips full solutions from replies; keep the unfiltered
+  text in `rawContent` when the filter changed something.
 - Exam chat: per-exam limits (`chatMaxMessages`, `chatFreeMessages`, `chatPenalty`, token limits, optional
   `chatSystemPrompt`). Over-long inputs are rejected without counting.

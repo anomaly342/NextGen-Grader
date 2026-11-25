@@ -1,4 +1,5 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
+import type { User } from '@repo/prisma';
 import {
   ConflictException,
   ForbiddenException,
@@ -6,8 +7,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { OAuth2Client as GoogleOAuthService } from 'google-auth-library';
-import { BcryptService } from '@/bcrypt/bcrypt.service';
 import { ClockService } from '@/clock/clock.service';
+import { HashingService } from '@/hashing/hashing.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { SessionPayload } from '@/sessions/interfaces/session-payload.interface';
 import { SessionRecord } from '@/sessions/interfaces/session-record.interface';
@@ -16,7 +17,6 @@ import { SessionsService } from '@/sessions/sessions.service';
 import {
   ALLOWED_EMAIL_DOMAINS,
   GOOGLE_HD_HINT,
-  DUMMY_PASSWORD_HASH,
   GOOGLE_SCOPES,
   PASSWORD_RESET_WINDOW_MS,
   PG_UNIQUE_VIOLATION,
@@ -29,8 +29,6 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
 import { GoogleProfile } from './interfaces/google-profile.interface';
 import { LoginResult } from './interfaces/login-result.interface';
-import { UserDto } from './dto/user.dto';
-import { UserDtoRow } from './dto/user-dto-row.dto';
 
 /** Sign-in, Credential setup, username change, and password change or reset. */
 @Injectable()
@@ -39,8 +37,8 @@ export class AuthService {
     private readonly googleOAuthService: GoogleOAuthService,
     private readonly prismaService: PrismaService,
     private readonly sessionsService: SessionsService,
-    private readonly bcryptService: BcryptService,
     private readonly clockService: ClockService,
+    private readonly hashingService: HashingService,
   ) {}
 
   /** Returns the Google consent-screen URL carrying `state`. */
@@ -68,13 +66,15 @@ export class AuthService {
    * so two requests can't both win. A failed setup leaves the session as it was.
    */
   async setupCredentials(
-    userId: number,
+    session: SessionPayload,
     { username, password }: SetupCredentialsDto,
-    cookieId: string,
   ): Promise<LoginResult> {
-    const current = await this.requireCurrentUserSession(cookieId, userId);
-    const passwordHash = await this.bcryptService.hash(password);
-    const user = await this.claimCredentials(userId, username, passwordHash);
+    const passwordHash = await this.hashingService.hash(password);
+    const user = await this.claimCredentials(
+      session.id,
+      username,
+      passwordHash,
+    );
     if (!user) {
       throw new ConflictException({
         code: AUTH_ERROR_CODE.SETUP_ALREADY_DONE,
@@ -83,8 +83,8 @@ export class AuthService {
     }
     const nextCookieId = await this.openUserSession(
       user,
-      current.startedBy,
-      this.toDate(current.lastLoginAt),
+      session.startedBy,
+      this.toDate(session.lastLoginAt),
     );
     return { cookieId: nextCookieId, user };
   }
@@ -92,7 +92,6 @@ export class AuthService {
   /**
    * Username + password sign-in. The username must match exactly (no case folding).
    * Unknown username and wrong password give the same 401 and take the same time.
-   * Rate-limited by the controller (LoginThrottlerGuard).
    */
   async loginWithPassword({
     username,
@@ -110,13 +109,11 @@ export class AuthService {
         'passwordHash',
       )
       .first();
-    // Missing user (or no hash yet) still runs bcrypt against a fixed hash, so
-    // unknown usernames take the same time as a wrong password.
-    const isPasswordValid = await this.bcryptService.verify(
+    const isPasswordValid = await this.hashingService.verify(
       password,
-      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+      user?.passwordHash ?? null,
     );
-    if (!user?.passwordHash || !isPasswordValid) {
+    if (!user || !isPasswordValid) {
       throw new UnauthorizedException({
         code: AUTH_ERROR_CODE.INVALID_CREDENTIALS,
         message: 'Wrong username or password',
@@ -134,12 +131,20 @@ export class AuthService {
    * The signed-in User. Display name, email, avatar and Role come from the
    * session. Username and credentialsSetAt come from the database.
    */
-  async getMe(sessionUser: SessionUser): Promise<UserDto> {
+  async getMe(sessionUser: SessionUser): Promise<User> {
     const row = await this.prismaService.User.where({ id: sessionUser.id })
       .select('username', 'credentialsSetAt')
       .first();
     if (!row) throw this.createNotSignedInError();
-    return this.toUserDto(sessionUser, row);
+    return this.toUser(sessionUser, row);
+  }
+
+  /** Throws 409 USERNAME_TAKEN when another User already has `username` (exact match). */
+  async checkUsernameAvailability(username: string): Promise<void> {
+    const existing = await this.prismaService.User.where({ username })
+      .select('id')
+      .first();
+    if (existing) throw this.createUsernameTakenError();
   }
 
   /**
@@ -150,17 +155,17 @@ export class AuthService {
   async changeUsername(
     sessionUser: SessionUser,
     { username }: ChangeUsernameDto,
-  ): Promise<UserDto> {
+  ): Promise<User> {
     const row = await this.renameUser(sessionUser.id, username);
     if (!row) throw this.createNotSignedInError();
-    return this.toUserDto(sessionUser, row);
+    return this.toUser(sessionUser, row);
   }
 
   /** Writes the new username; null if the User row is gone. A taken username is 409. */
   private async renameUser(
     userId: number,
     username: string,
-  ): Promise<Pick<UserDto, 'username' | 'credentialsSetAt'> | null> {
+  ): Promise<Pick<User, 'username' | 'credentialsSetAt'> | null> {
     try {
       return await this.prismaService.User.where({ id: userId })
         .select('username', 'credentialsSetAt')
@@ -183,11 +188,11 @@ export class AuthService {
     const user = await this.prismaService.User.where({ id: userId })
       .select('passwordHash')
       .first();
-    const isCurrentPasswordValid = await this.bcryptService.verify(
+    const isCurrentPasswordValid = await this.hashingService.verify(
       currentPassword,
-      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+      user?.passwordHash ?? null,
     );
-    if (!user?.passwordHash || !isCurrentPasswordValid) {
+    if (!isCurrentPasswordValid) {
       throw new UnauthorizedException({
         code: AUTH_ERROR_CODE.INVALID_CREDENTIALS,
         message: 'Wrong password',
@@ -203,18 +208,16 @@ export class AuthService {
    * The current session stays.
    */
   async resetPassword(
-    userId: number,
+    session: SessionPayload,
     { newPassword }: ResetPasswordDto,
-    cookieId: string,
   ): Promise<void> {
-    const session = await this.requireCurrentUserSession(cookieId, userId);
     if (!this.isRecentGoogleSignIn(session)) {
       throw new ForbiddenException({
         code: AUTH_ERROR_CODE.RECENT_GOOGLE_SIGN_IN_REQUIRED,
         message: 'Sign in with your University account again',
       });
     }
-    await this.replacePassword(userId, newPassword);
+    await this.replacePassword(session.id, newPassword);
   }
 
   /** Deletes the session behind `cookieId` and its pointer when it is still current. */
@@ -228,7 +231,7 @@ export class AuthService {
     password: string,
   ): Promise<void> {
     await this.prismaService.User.where({ id: userId }).update({
-      passwordHash: await this.bcryptService.hash(password),
+      passwordHash: await this.hashingService.hash(password),
     });
   }
 
@@ -248,7 +251,7 @@ export class AuthService {
     userId: number,
     username: string,
     passwordHash: string,
-  ): Promise<UserDtoRow | null> {
+  ): Promise<User | null> {
     try {
       return await this.prismaService.User.where({ id: userId })
         .where((user) => user.credentialsSetAt.isNull())
@@ -280,16 +283,6 @@ export class AuthService {
     });
   }
 
-  /** The current User session, or 401 when this cookie is not that User's. */
-  private async requireCurrentUserSession(
-    cookieId: string,
-    userId: number,
-  ): Promise<SessionPayload> {
-    const current = await this.sessionsService.findCurrentUserSession(cookieId);
-    if (!current || current.id !== userId) throw this.createNotSignedInError();
-    return current;
-  }
-
   /** The 401 for a request whose session no longer matches a signed-in User. */
   private createNotSignedInError(): UnauthorizedException {
     return new UnauthorizedException({
@@ -302,10 +295,10 @@ export class AuthService {
    * The User as the API returns it: profile and Role from the session,
    * username and credentialsSetAt from the database row.
    */
-  private toUserDto(
+  private toUser(
     sessionUser: SessionUser,
-    row: Pick<UserDto, 'username' | 'credentialsSetAt'>,
-  ): UserDto {
+    row: Pick<User, 'username' | 'credentialsSetAt'>,
+  ): User {
     return {
       id: sessionUser.id,
       email: sessionUser.email,
@@ -360,7 +353,7 @@ export class AuthService {
   }
 
   /** Creates the user on first login, otherwise refreshes their profile and last login. */
-  private async upsertUser(profile: GoogleProfile): Promise<UserDtoRow> {
+  private async upsertUser(profile: GoogleProfile): Promise<User> {
     const lastLoginAt = this.clockService.now();
     return this.prismaService.User.select(
       'id',
@@ -402,7 +395,7 @@ export class AuthService {
 
   /** Opens a User session, ending whatever session this User had. */
   private openUserSession(
-    user: UserDtoRow,
+    user: User,
     startedBy: SessionRecord['startedBy'],
     lastLoginAt: Date | null,
   ): Promise<string> {
@@ -417,7 +410,7 @@ export class AuthService {
   }
 
   /** The user body stored in the session JWT. */
-  private toSessionUser(row: UserDtoRow): SessionUser {
+  private toSessionUser(row: User): SessionUser {
     return {
       id: row.id,
       email: row.email,

@@ -3,6 +3,7 @@
 import { ApiError } from '@repo/lib/api/api-error';
 import { apiRequest } from '@repo/lib/api/browser-client';
 import { getErrorMessage } from '@repo/lib/auth/error-messages';
+import { withNext } from '@repo/lib/auth/next-path';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -15,9 +16,7 @@ import { toast } from 'sonner';
 export function useGoogleLogin() {
   const { mutate, isPending, isSuccess } = useMutation({
     mutationFn: (next: string | null) =>
-      apiRequest<{ url: string }>(
-        `/auth/google${next ? `?${new URLSearchParams({ next }).toString()}` : ''}`,
-      ),
+      apiRequest<{ url: string }>(withNext('/auth/google', next)),
     onSuccess: ({ url }) => window.location.assign(url),
     // Outside the form, so a toast (a live region already on the page) rather than a new banner.
     onError: (error) =>

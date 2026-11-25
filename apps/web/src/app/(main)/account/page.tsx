@@ -4,13 +4,11 @@ import { Card, CardContent } from '@repo/ui/card';
 import { Separator } from '@repo/ui/separator';
 import { LockIcon } from 'lucide-react';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { ChangePasswordForm } from '@/components/account/change-password-form';
 import { ChangeUsernameForm } from '@/components/account/change-username-form';
 import { LogoutButton } from '@/components/account/logout-button';
-import { createServerClient } from '@/lib/server-client';
+import { requireCurrentUser } from '@/lib/current-user';
 
 export const metadata: Metadata = { title: 'Account · NextGen Grader' };
 
@@ -20,9 +18,7 @@ export const metadata: Metadata = { title: 'Account · NextGen Grader' };
  * `router.refresh()` after a change, which loads the User here again.
  */
 export default async function AccountPage() {
-  const cookie = (await headers()).get('cookie');
-  const user = await createServerClient(cookie).getMe();
-  if (!user) redirect('/login?next=/account');
+  const user = await requireCurrentUser();
 
   return (
     <main className="bg-background flex flex-1 justify-center px-4 pt-8 pb-12 md:pt-13">
@@ -81,7 +77,10 @@ export default async function AccountPage() {
             <p className="font-mono text-base font-semibold">{user.username}</p>
           </div>
           <Separator />
-          <ChangeUsernameForm labelledBy="account-username-title" />
+          <ChangeUsernameForm
+            labelledBy="account-username-title"
+            currentUsername={user.username}
+          />
         </AccountSection>
 
         <AccountSection

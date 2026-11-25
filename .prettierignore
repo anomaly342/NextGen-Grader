@@ -6,3 +6,22 @@ coverage
 .turbo
 bun.lock
 packages/db/generated
+
+# Ignored by nested .gitignore files, which Prettier does not read
+packages/prisma/.agents
+packages/prisma/.claude
+packages/prisma/.cursor
+packages/prisma/.devin
+packages/prisma/src/prisma/contract.json
+packages/prisma/src/prisma/contract.d.ts
+apps/web/scripts/visual
+apps/web/next-env.d.ts
+
+# Local tool state, not in git
+.impeccable
+
+# Generated
+packages/prisma/migrations
+skills-lock.json
+# `next dev` rewrites its block word for word; reflowing it here would make the two fight
+apps/web/AGENTS.md

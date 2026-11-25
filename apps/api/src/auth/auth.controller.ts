@@ -1,4 +1,5 @@
 import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
+import type { User } from '@repo/prisma';
 import {
   Body,
   Controller,
@@ -22,10 +23,11 @@ import {
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { Cookies } from '@/common/decorators/cookies.decorator';
+import { CurrentSession } from '@/common/decorators/current-session.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { SkipCredentialSetup } from '@/common/decorators/skip-credential-setup.decorator';
+import type { SessionPayload } from '@/sessions/interfaces/session-payload.interface';
 import type { SessionUser } from '@/sessions/interfaces/session-user.interface';
-import { LoginThrottlerGuard } from '@/common/guards/login-throttler.guard';
 import { SessionGuard } from '@/common/guards/session.guard';
 import {
   SESSION_COOKIE_NAME,
@@ -47,10 +49,10 @@ import { errorSchema } from '@/common/swagger/swagger.util';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangeUsernameDto } from './dto/change-username.dto';
+import { CheckUsernameDto } from './dto/check-username.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetupCredentialsDto } from './dto/setup-credentials.dto';
-import type { UserDto } from './dto/user.dto';
 import type { GoogleAuthUrl } from './interfaces/google-auth-url.interface';
 import type { GoogleCallbackErrorCode } from './interfaces/google-callback-error-code.interface';
 import type { OAuthState } from './interfaces/oauth-state.interface';
@@ -202,28 +204,26 @@ export class AuthController {
     schema: errorSchema(AUTH_ERROR_CODE.USERNAME_TAKEN),
   })
   async setupCredentials(
-    @CurrentUser() sessionUser: SessionUser,
+    @CurrentSession() session: SessionPayload,
     @Body() body: SetupCredentialsDto,
-    @Cookies(SESSION_COOKIE_NAME) cookieId: string,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<UserDto> {
-    const { cookieId: nextCookieId, user } =
-      await this.authService.setupCredentials(sessionUser.id, body, cookieId);
-    this.setSessionCookie(res, nextCookieId);
+  ): Promise<User> {
+    const { cookieId, user } = await this.authService.setupCredentials(
+      session,
+      body,
+    );
+    this.setSessionCookie(res, cookieId);
     return user;
   }
 
   /** Username + password sign-in; sets the session cookie. */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(LoginThrottlerGuard)
   @ApiOperation({
     summary: 'Sign in with username and password',
     description:
       'For returning users who finished setup. Sets the httpOnly `ngg.sid` session cookie. ' +
-      'The username must match exactly: different capitals are 401. ' +
-      'Rate limit: 5 tries per minute per username (capitals ignored, so case variants share ' +
-      'one counter) and 100 tries per minute per IP.',
+      'The username must match exactly: different capitals are 401.',
   })
   @ApiOkResponse({ schema: USER_RESPONSE_SCHEMA })
   @ApiResponse({
@@ -237,19 +237,10 @@ export class AuthController {
       'This browser already has a User session whose Credential setup is not done.',
     schema: errorSchema(AUTH_ERROR_CODE.CREDENTIAL_SETUP_REQUIRED),
   })
-  @ApiResponse({
-    status: 429,
-    description:
-      'Too many tries for this username or from this IP. Body includes `retryAfterSec`; ' +
-      'the `Retry-After` header carries the same value.',
-    schema: errorSchema(AUTH_ERROR_CODE.TOO_MANY_ATTEMPTS, {
-      retryAfterSec: { type: 'integer', example: 42 },
-    }),
-  })
   async loginWithPassword(
     @Body() body: LoginDto,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<UserDto> {
+  ): Promise<User> {
     const { cookieId, user } = await this.authService.loginWithPassword(body);
     this.setSessionCookie(res, cookieId);
     return user;
@@ -271,8 +262,35 @@ export class AuthController {
     description: 'Not signed in, or `ngg.sid` is not a current User session.',
     schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
   })
-  getMe(@CurrentUser() sessionUser: SessionUser): Promise<UserDto> {
+  getMe(@CurrentUser() sessionUser: SessionUser): Promise<User> {
     return this.authService.getMe(sessionUser);
+  }
+
+  /** 200 when `username` is free right now; 409 USERNAME_TAKEN when taken. Hint only; submit still enforces uniqueness. */
+  @Get('check-username')
+  @SkipCredentialSetup()
+  @UseGuards(SessionGuard)
+  @ApiOperation({
+    summary: 'Check username availability',
+    description:
+      'Signed in (works before Credential setup is done). Returns 200 with no body when no User ' +
+      'currently has `username`, or 409 `USERNAME_TAKEN` when taken. Hint only: Credential setup ' +
+      'and change username still return 409 `USERNAME_TAKEN` if another User claims it first.',
+  })
+  @ApiOkResponse({ description: 'The username is currently free.' })
+  @ApiResponse({ status: 400, description: 'The username fails the rules.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Not signed in.',
+    schema: errorSchema(AUTH_ERROR_CODE.NOT_SIGNED_IN),
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Another User has that username.',
+    schema: errorSchema(AUTH_ERROR_CODE.USERNAME_TAKEN),
+  })
+  checkUsername(@Query() { username }: CheckUsernameDto): Promise<void> {
+    return this.authService.checkUsernameAvailability(username);
   }
 
   /** Changes the signed-in User's username (sign-in handle). The current session stays signed in. */
@@ -305,7 +323,7 @@ export class AuthController {
   changeUsername(
     @CurrentUser() sessionUser: SessionUser,
     @Body() body: ChangeUsernameDto,
-  ): Promise<UserDto> {
+  ): Promise<User> {
     return this.authService.changeUsername(sessionUser, body);
   }
 
@@ -375,11 +393,10 @@ export class AuthController {
     schema: errorSchema(AUTH_ERROR_CODE.RECENT_GOOGLE_SIGN_IN_REQUIRED),
   })
   async resetPassword(
-    @CurrentUser() sessionUser: SessionUser,
-    @Cookies(SESSION_COOKIE_NAME) cookieId: string,
+    @CurrentSession() session: SessionPayload,
     @Body() body: ResetPasswordDto,
   ): Promise<void> {
-    await this.authService.resetPassword(sessionUser.id, body, cookieId);
+    await this.authService.resetPassword(session, body);
   }
 
   /** Deletes the User session and its pointer, and clears only `ngg.sid`. */

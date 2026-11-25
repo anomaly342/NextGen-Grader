@@ -1,7 +1,7 @@
 import type { Request } from 'express';
-import type { SessionUser } from './session-user.interface';
+import type { SessionPayload } from './session-payload.interface';
 
-/** An Express request after SessionGuard has attached the signed-in user. */
+/** An Express request after SessionMiddleware has checked `ngg.sid`. */
 export interface SessionRequest extends Request {
-  sessionUser?: SessionUser;
+  session?: SessionPayload;
 }

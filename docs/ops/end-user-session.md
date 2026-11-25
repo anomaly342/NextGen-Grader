@@ -1,6 +1,7 @@
 # End a User's session after a Role change
 
-A session keeps a copy of the User's Role. Changing `User.role` in Postgres does not change that copy. Delete the session, then the User signs in again and the new Role is loaded.
+A session keeps a copy of the User's Role. Changing `User.role` in Postgres does not change that copy. Delete the
+session, then the User signs in again and the new Role is loaded.
 
 `ngg.exam.sid` is reserved for Examinees. Do not delete Examinee keys when changing a User's Role.
 
@@ -33,4 +34,5 @@ DEL ngg:session:3f2a1c0e-7b4d-4e1a-9c8f-6d5e4f3a2b10
 DEL ngg:session:pointer:USER:42
 ```
 
-The old `ngg.sid` cookie then gets 401 `NOT_SIGNED_IN`. The next sign-in (Google or password) starts a session with the new Role.
+The old `ngg.sid` cookie then gets 401 `NOT_SIGNED_IN`. The next sign-in (Google or password) starts a session with the
+new Role.

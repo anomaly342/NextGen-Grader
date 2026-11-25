@@ -2,8 +2,11 @@
 
 import { getAuthErrorCode, type ApiError } from '@repo/lib/api/api-error';
 import { apiRequest } from '@repo/lib/api/browser-client';
-import { useMutation } from '@tanstack/react-query';
+import { AUTH_ERROR_CODE } from '@repo/lib/auth/error-codes';
+import { HOME_PATH } from '@repo/lib/auth/next-path';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { getUsernameAvailabilityKey } from './use-check-username';
 
 /**
  * Credential setup. `finishSetup(values, { onError })` posts the username and
@@ -13,6 +16,7 @@ import { useRouter } from 'next/navigation';
  * its auth code (null when it has none, e.g. a 5xx).
  */
 export function useFinishSetup(next: string | null) {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const { mutate, isPending, isSuccess, isError, error } = useMutation<
     unknown,
@@ -21,7 +25,13 @@ export function useFinishSetup(next: string | null) {
   >({
     mutationFn: (values) =>
       apiRequest('/auth/setup', { method: 'POST', body: values }),
-    onSuccess: () => router.replace(next ?? '/'),
+    onSuccess: () => router.replace(next ?? HOME_PATH),
+    onError: (mutationError, values) => {
+      if (mutationError.code !== AUTH_ERROR_CODE.USERNAME_TAKEN) return;
+      queryClient.removeQueries({
+        queryKey: getUsernameAvailabilityKey(values.username),
+      });
+    },
   });
 
   return {

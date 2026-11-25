@@ -1,11 +1,6 @@
 import { ApiError } from '@repo/lib/api/api-error';
-import type { ModelRow } from '@repo/prisma';
-
-/** The User as `GET /auth/me` returns it (same columns as the API's `UserDto`). */
-type Me = Omit<
-  ModelRow<'User'>,
-  'googleId' | 'passwordHash' | 'lastLoginAt' | 'updatedAt' | 'createdAt'
->;
+import { parseUser } from '@repo/lib/api/parse-user';
+import type { User } from '@repo/prisma';
 
 /**
  * The server-only client, for the proxy (middleware) and server components.
@@ -34,7 +29,7 @@ export function createServerClient(cookie: string | null) {
      * The signed-in User, or null when there is no cookie or the session is
      * not current (401 `NOT_SIGNED_IN`). Throws ApiError on any other failure.
      */
-    async getMe(): Promise<Me | null> {
+    async getMe(): Promise<User | null> {
       if (!cookie) return null;
       const res = await fetch(`${baseUrl}${API_PREFIX}/auth/me`, {
         headers: { cookie },
@@ -42,7 +37,7 @@ export function createServerClient(cookie: string | null) {
       });
       if (res.status === 401) return null;
       if (!res.ok) throw await ApiError.fromResponse(res);
-      return (await res.json()) as Me;
+      return parseUser(await res.json());
     },
   };
 }

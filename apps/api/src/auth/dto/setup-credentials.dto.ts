@@ -1,13 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Length, Matches } from 'class-validator';
 import {
-  PASSWORD_MAX_LENGTH,
+  IsByteLength,
+  IsString,
+  Length,
+  Matches,
+  MinLength,
+} from 'class-validator';
+import {
+  PASSWORD_MAX_BYTES,
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
 } from '@repo/lib/auth/credential-rules';
-
 /** Body of POST /auth/setup. */
 export class SetupCredentialsDto {
   @ApiProperty({
@@ -26,9 +31,10 @@ export class SetupCredentialsDto {
   @ApiProperty({
     example: 'correct horse battery staple',
     minLength: PASSWORD_MIN_LENGTH,
-    maxLength: PASSWORD_MAX_LENGTH,
+    description: `At most ${PASSWORD_MAX_BYTES} bytes in UTF-8 (what bcrypt keeps).`,
   })
   @IsString()
-  @Length(PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH)
+  @MinLength(PASSWORD_MIN_LENGTH)
+  @IsByteLength(0, PASSWORD_MAX_BYTES)
   readonly password!: string;
 }

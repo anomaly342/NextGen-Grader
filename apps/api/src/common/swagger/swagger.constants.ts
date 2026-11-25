@@ -5,7 +5,7 @@ export type SchemaObject = NonNullable<
   Extract<Parameters<typeof ApiOkResponse>[0], { schema?: unknown }>['schema']
 >;
 
-/** OpenAPI schema of a `UserDto` (interfaces have no runtime shape for Swagger to read). */
+/** OpenAPI schema of a `User` (interfaces have no runtime shape for Swagger to read). */
 export const USER_RESPONSE_SCHEMA: SchemaObject = {
   type: 'object',
   required: [

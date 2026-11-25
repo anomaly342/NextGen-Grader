@@ -1,10 +1,8 @@
 import { getSameSitePath } from '@repo/lib/auth/next-path';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { BrandLockup } from '@/components/common/brand-lockup';
 import { SetupCard } from '@/components/setup/setup-card';
-import { createServerClient } from '@/lib/server-client';
+import { requireCurrentUser } from '@/lib/current-user';
 
 export const metadata: Metadata = {
   title: 'Set up your sign-in · NextGen Grader',
@@ -17,9 +15,7 @@ export const metadata: Metadata = {
  */
 export default async function SetupPage({ searchParams }: PageProps<'/setup'>) {
   const { next } = await searchParams;
-  const cookie = (await headers()).get('cookie');
-  const user = await createServerClient(cookie).getMe();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
 
   return (
     <main className="bg-background flex flex-1 flex-col items-center gap-7 px-4 pt-[clamp(28px,7vh,80px)] pb-10">
