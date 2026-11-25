@@ -1,6 +1,6 @@
 # NextGen Grader: project context
 
-NextGen Grader is a university programming judge. Students upload `.cpp` files, a sandboxed worker compiles and runs
+NextGen Grader is a university programming judge. Students upload source files, a sandboxed worker compiles and runs
 them against test cases, and the result comes back live. On top of judging it has: classrooms with sections, three
 grading modes, Elo-based practice recommendations, an LLM debugging chatbot, an exam mode with separate exam accounts,
 Dolos plagiarism checks (exams only), and LLM problem drafting.
@@ -23,7 +23,8 @@ Dolos plagiarism checks (exams only), and LLM problem drafting.
 
 - Student code and chat must never leave our servers. Never add calls to external AI APIs, external plagiarism services
   (e.g. MOSS) or third-party code-analysis services.
-- Students submit in exactly one language per classroom (`Classroom.language`, default C++17).
+- Students submit in exactly one language per classroom (`Classroom.language`: `C11`, `CPP17`, `JAVA`, `PYTHON3`;
+  default `CPP17`; fixed at creation).
 - Time checks (deadlines, exam windows) always use the server clock, never the client's.
 - Limits that matter for fairness (submission counts, exam chat counts) are enforced in SQL with conditional updates,
   not only in application code or the UI.
@@ -52,7 +53,8 @@ Dolos plagiarism checks (exams only), and LLM problem drafting.
 - `MANDATORY_AND_OPTIONAL`: total = `mandatoryPoints` + `optionalPoints`; the optional part is earned against
   `optionalTarget`.
 - `MANDATORY_AND_BONUS`: `mandatoryPoints` is the total; `optionalPoints` is a separate bonus on top.
-- `optionalPartial = true`: below target earns a proportional share. `false`: 0 until the target is reached.
+- The optional share is always proportional: best scores over `optionalTarget`, capped at `optionalPoints`. There is no
+  all-or-nothing option.
 
 ## Elo practice recommender (OPTIONAL problems only, never mandatory or exam)
 

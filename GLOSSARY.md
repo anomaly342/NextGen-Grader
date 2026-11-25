@@ -1,6 +1,6 @@
 # NextGen Grader
 
-A university programming judge: students submit C++ to problems in their classrooms and get judged results back live.
+A university programming judge: students submit code to problems in their classrooms and get judged results back live.
 
 ## Identity and sign-in
 
@@ -44,8 +44,17 @@ Token, login state
 
 ## Classrooms and exams
 
-**Classroom**: A course offering with one language, C++17 unless the Teacher sets another, and Users submit in that
-language only. It may have several Exams, or none when the work is lab only. _Avoid_: Course, class, subject
+**Classroom**: A course offering for one semester of one academic year, with a course code, a name and one language. The
+language is C++17 unless the Teacher picks another when creating the Classroom, and it never changes after that. Users
+submit in that language only. It may have several Exams, or none when the work is lab only. _Avoid_: Course, class,
+subject
+
+**ClassroomTeacher**: A Teacher who runs one Classroom. A Classroom always has at least one, and a Teacher who is not
+one cannot see that Classroom. _Avoid_: Instructor, co-teacher, staff
+
+**Closed classroom**: A Classroom a ClassroomTeacher has closed. Its ClassroomTeachers and Students can still read it,
+but nobody can join it or submit to it until a ClassroomTeacher reopens it. A Classroom has no end date. _Avoid_:
+Archived, ended, expired
 
 **Exam**: One sitting of a Classroom, held separately from its other sittings. It has no late penalty: before it opens
 the Examinee does not see its Problems, and after it closes no further Submission is allowed. _Avoid_: Test, quiz
@@ -91,18 +100,25 @@ Demo, public test
 **Weight**: A test case's share of the Problem's maximum score. A Try's score, before a late penalty, is the sum of the
 weights of the test cases it passed, and this is the Problem's only scoring method. _Avoid_: Priority, rank
 
-**Section**: A group of students within one Classroom, with a five-character join code and a fixed section number
-starting at 1. Removing a Section does not change the other numbers. _Avoid_: Group, cohort, class, index
+**Section**: A group of Students within one Classroom, with a five-character join code and a section number. The first
+Section is 1 and each new one is one more than the highest existing number. Only a Section with no Enrollments can be
+removed, and removing it does not change the other numbers. _Avoid_: Group, cohort, class, index
 
-**Join code**: The five-character code of a Section. A User enters it to enroll in that one Section. _Avoid_: Password,
-PIN
+**Section teacher**: A ClassroomTeacher listed on one Section as the one who teaches it. A Section may have none or
+several. The listing only tells people who teaches whom; every ClassroomTeacher can still manage every Section. _Avoid_:
+Section owner, instructor
+
+**Join code**: The five-character code of a Section, unique across all Classrooms. A Student enters it to enroll in that
+one Section. A ClassroomTeacher can replace it, after which the old code no longer works, or close joining for that
+Section. _Avoid_: Password, PIN
 
 **Section assignment**: A lab Problem given to one Section, with no cap on Submissions. Before its open time Users in
 that Section do not see it; after the close time they still see it and cannot submit unless the Teacher allows
 Submissions, which take the late penalty. _Avoid_: Homework, slot, submission cap
 
-**Enrollment**: A User's place in one Section of a Classroom. That User's lab Submissions use that Section's assignment.
-_Avoid_: Registration, signup
+**Enrollment**: A Student's place in one Section of a Classroom, at most one per Classroom. Only a ClassroomTeacher can
+move it to another Section or remove it. That Student's lab Submissions use that Section's assignment. _Avoid_:
+Registration, signup
 
 **Lab problem**: A Problem on no Exam. It is Mandatory or Optional, and a Teacher can switch that. It may be assigned to
 more than one Section of its Classroom. _Avoid_: Homework, coursework
