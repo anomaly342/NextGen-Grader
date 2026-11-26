@@ -27,9 +27,6 @@ export default async function AccountPage() {
           <h1 className="text-[28px] leading-9 font-extrabold tracking-tight md:text-[30px]">
             Account
           </h1>
-          <p className="text-muted-foreground text-base">
-            Your profile and how you sign in.
-          </p>
         </div>
 
         <AccountSection
