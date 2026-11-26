@@ -3,6 +3,6 @@
 import { PageError } from '@/components/common/page-error';
 
 /** Shown when `/account` fails to render; `retry` renders it again. */
-export default function AccountError({ retry }: { retry: () => void }) {
+export default function Error({ retry }: { retry: () => void }) {
   return <PageError title="The account page did not load" retry={retry} />;
 }

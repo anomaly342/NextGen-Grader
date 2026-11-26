@@ -1,6 +1,6 @@
 import { PageLoading } from '@/components/common/page-loading';
 
 /** Shown while `/setup` loads the signed-in User. */
-export default function SetupLoading() {
+export default function Loading() {
   return <PageLoading />;
 }
